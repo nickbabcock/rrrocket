@@ -1,5 +1,7 @@
 # rrrocket
 
+[![Build Status](https://travis-ci.org/nickbabcock/rrrocket.svg?branch=master)](https://travis-ci.org/nickbabcock/rrrocket) [![Build status](https://ci.appveyor.com/api/projects/status/939bi13urfp8w1n6?svg=true)](https://ci.appveyor.com/project/nickbabcock/rrrocket)
+
 rrrocket is what a cli utilizing the [boxcars
 library](https://crates.io/crates/boxcars).  rrrocket parses a Rocket League
 replay file and outputs JSON. The executable has been built for many platforms,
