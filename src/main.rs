@@ -1,5 +1,7 @@
 #[cfg(test)]
-extern crate assert_cli;
+extern crate assert_cmd;
+#[cfg(test)]
+extern crate predicates;
 extern crate boxcars;
 extern crate failure;
 extern crate globset;
@@ -179,51 +181,41 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use assert_cli::Assert;
-    use std::io::Write;
+    use assert_cmd::prelude::*;
+    use predicates::prelude::*;
+    use std::process::Command;
 
     #[test]
     fn test_error_output() {
-        let mut w = Vec::new();
-        writeln!(
-            &mut w,
-            "Could not open rocket league file: assets/fuzz-string-too-long.replay"
-        ).unwrap();
-
-        Assert::cargo_binary("rrrocket")
-            .with_args(&[
+        Command::cargo_bin("rrrocket")
+            .unwrap()
+            .args(&[
                 "-n",
                 "-c",
                 "--dry-run",
-                "assets/fuzz-string-too-long.replay",
-            ]).fails_with(1)
-            .stderr()
-            .contains(String::from_utf8(w).unwrap())
-            .unwrap();
+                "non-exist/assets/fuzz-string-too-long.replay",
+            ])
+            .assert()
+            .failure()
+            .code(1)
+            .stderr(predicate::str::contains("Could not open rocket league file: non-exist/assets/fuzz-string-too-long.replay"));
     }
 
     #[test]
     fn test_error_output2() {
-        let mut w = Vec::new();
-        writeln!(
-            &mut w,
-            "Could not parse: ../assets/fuzz-string-too-long.replay"
-        ).unwrap();
-        writeln!(
-            &mut w,
-            "Crc mismatch. Expected 3765941959 but received 1825689991"
-        ).unwrap();
-
-        Assert::cargo_binary("rrrocket")
-            .with_args(&[
+        Command::cargo_bin("rrrocket")
+            .unwrap()
+            .args(&[
                 "-n",
                 "-c",
                 "--dry-run",
                 "-m",
-                "../assets/fuzz-string-too-long.replay",
-            ]).fails_with(1)
-            .stderr()
-            .contains(String::from_utf8(w).unwrap())
-            .unwrap();
+                "assets/fuzz-string-too-long.replay",
+            ])
+            .assert()
+            .failure()
+            .code(1)
+            .stderr(predicate::str::contains("Could not parse: assets/fuzz-string-too-long.replay"))
+            .stderr(predicate::str::contains("Crc mismatch. Expected 3765941959 but received 1825689991"));
     }
 }
