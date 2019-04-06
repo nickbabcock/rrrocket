@@ -1,3 +1,11 @@
+## v0.2.8 - April 5th, 2019
+
+* Release for rrrocket's new home (split from the boxcars repo). No changes.
+
+## v0.2.7 - April 4th, 2019
+
+* Update replay parser to be compatible with v1.59
+
 ## v0.2.6 - September 6th, 2018
 
 * Update replay parser to be compatible with v1.50
