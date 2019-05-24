@@ -1,3 +1,7 @@
+## v0.2.11 - May 24th 2019
+
+* Update replay parser to be compatible with more replays
+
 ## v0.2.10 - April 25th 2019
 
 * Serialize 64bit numbers as strings, so that JSON parsers don't lose any data
