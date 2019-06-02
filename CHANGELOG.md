@@ -1,3 +1,8 @@
+## v0.2.12 - June 2nd 2019
+
+* CRC content changed from signed 32bits to unsigned
+* Expose additional information about remote ids on reservations
+
 ## v0.2.11 - May 24th 2019
 
 * Update replay parser to be compatible with more replays
