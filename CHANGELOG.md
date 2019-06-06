@@ -1,3 +1,7 @@
+## v0.2.13 - June 5th 2019
+
+* Update replay parser to be compatible with v1.63
+
 ## v0.2.12 - June 2nd 2019
 
 * CRC content changed from signed 32bits to unsigned
