@@ -173,7 +173,9 @@ fn run() -> Result<(), Error> {
         let data = read_file(file)?;
         let replay = parse_replay(&opt, &data[..]).context("Could not parse replay")?;
         if !opt.dry_run {
-            serialize(&opt, &mut io::stdout(), &replay).context("Could not serialize replay")?;
+            let stdout = io::stdout();
+            let lock = stdout.lock();
+            serialize(&opt, lock, &replay).context("Could not serialize replay")?;
         }
         Ok(())
     }
