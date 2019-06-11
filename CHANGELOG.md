@@ -1,3 +1,8 @@
+## v0.4.0 - June 11th 2019
+
+* 4x performance improvement when printing json to stdout
+* Accept replays piped via stdin
+
 ## v0.3.0 - June 10th 2019
 
 * Add `-p/--pretty` flag for pretty printing the JSON output
