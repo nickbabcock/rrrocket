@@ -175,7 +175,7 @@ fn run() -> Result<(), Error> {
         if !opt.dry_run {
             let stdout = io::stdout();
             let lock = stdout.lock();
-            serialize(&opt, lock, &replay).context("Could not serialize replay")?;
+            serialize(&opt, BufWriter::new(lock), &replay).context("Could not serialize replay")?;
         }
         Ok(())
     }
