@@ -47,9 +47,13 @@ struct Opt {
     multiple: bool,
 
     #[structopt(
-        long = "dry-run",
-        help = "parses but does not write JSON output"
+        short = "p",
+        long = "pretty",
+        help = "output replay as pretty-printed JSON"
     )]
+    pretty: bool,
+
+    #[structopt(long = "dry-run", help = "parses but does not write JSON output")]
     dry_run: bool,
 
     #[structopt(help = "Rocket League replay files")]
@@ -139,13 +143,21 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), Error> {
                     .with_context(|_e| format!("Could not open json output file: {}", outfile))?;
 
                 let mut writer = BufWriter::new(fout);
-                serde_json::to_writer(&mut writer, &replay)
+                serialize(opt, &mut writer, &replay)
                     .with_context(|_e| format!("Could not serialize replay {}", file))?;
             }
             Ok(())
         }).collect();
     res?;
     Ok(())
+}
+
+fn serialize<W: Write>(opt: &Opt, writer: W, replay: &Replay) -> Result<(), serde_json::Error> {
+    if opt.pretty {
+        serde_json::to_writer_pretty(writer, &replay)
+    } else {
+        serde_json::to_writer(writer, replay)
+    }
 }
 
 fn run() -> Result<(), Error> {
@@ -161,8 +173,7 @@ fn run() -> Result<(), Error> {
         let data = read_file(file)?;
         let replay = parse_replay(&opt, &data[..]).context("Could not parse replay")?;
         if !opt.dry_run {
-            serde_json::to_writer(&mut io::stdout(), &replay)
-                .context("Could not serialize replay")?;
+            serialize(&opt, &mut io::stdout(), &replay).context("Could not serialize replay")?;
         }
         Ok(())
     }
