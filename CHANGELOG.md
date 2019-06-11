@@ -1,3 +1,7 @@
+## v0.3.0 - June 10th 2019
+
+* Add `-p/--pretty` flag for pretty printing the JSON output
+
 ## v0.2.13 - June 5th 2019
 
 * Update replay parser to be compatible with v1.63
