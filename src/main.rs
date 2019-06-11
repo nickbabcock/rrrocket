@@ -164,13 +164,20 @@ fn run() -> Result<(), Error> {
     let opt = Opt::from_args();
     if opt.multiple {
         parse_multiple_replays(&opt)
-    } else if opt.input.len() != 1 {
+    } else if opt.input.len() > 1 {
         Err(err_msg(
             "Expected one input file if --multiple is not specified",
         ))
     } else {
-        let file = &opt.input[0];
-        let data = read_file(file)?;
+        let data = if opt.input.is_empty() {
+            let mut d = Vec::new();
+            io::stdin().read_to_end(&mut d).context("Could not read stdin")?;
+            d
+        } else {
+            let file = &opt.input[0];
+            read_file(file)?
+        };
+
         let replay = parse_replay(&opt, &data[..]).context("Could not parse replay")?;
         if !opt.dry_run {
             let stdout = io::stdout();
