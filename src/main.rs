@@ -2,6 +2,10 @@
 extern crate assert_cmd;
 #[cfg(test)]
 extern crate predicates;
+#[cfg(test)]
+extern crate fs_extra;
+#[cfg(test)]
+extern crate tempfile;
 extern crate boxcars;
 extern crate failure;
 extern crate globset;
@@ -204,6 +208,7 @@ mod tests {
     use assert_cmd::prelude::*;
     use predicates::prelude::*;
     use std::process::Command;
+    use tempfile::tempdir;
 
     #[test]
     fn test_error_output() {
@@ -237,5 +242,45 @@ mod tests {
             .code(1)
             .stderr(predicate::str::contains("Could not parse: assets/fuzz-string-too-long.replay"))
             .stderr(predicate::str::contains("Crc mismatch. Expected 3765941959 but received 1825689991"));
+    }
+
+    #[test]
+    fn test_file_in_stdout() {
+        Command::cargo_bin("rrrocket")
+            .unwrap()
+            .args(&["-n", "assets/replays/1ec9.replay"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(r#"{"header_size":1944,"header_crc":3561912561"#));
+    }
+
+    #[test]
+    fn test_stdin_stdout() {
+        Command::cargo_bin("rrrocket")
+            .unwrap()
+            .args(&["-n"])
+            .with_stdin()
+            .path("assets/replays/1ec9.replay")
+            .unwrap()
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(r#"{"header_size":1944,"header_crc":3561912561"#));
+    }
+
+    #[test]
+    fn test_directory_in() {
+        let dir = tempdir().unwrap();
+        let options = fs_extra::dir::CopyOptions::new();
+        let replays_path = dir.path().join("replays");
+        let path = replays_path.to_str().unwrap().to_owned();
+        fs_extra::dir::copy("assets/replays", dir.path(), &options).unwrap();
+
+        Command::cargo_bin("rrrocket")
+            .unwrap()
+            .args(&["-n", "-m", &path])
+            .assert()
+            .success();
+
+        assert!(replays_path.join("1ec9.replay.json").as_path().exists());
     }
 }
