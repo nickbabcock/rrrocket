@@ -1,18 +1,3 @@
-#[cfg(test)]
-extern crate assert_cmd;
-#[cfg(test)]
-extern crate predicates;
-#[cfg(test)]
-extern crate fs_extra;
-#[cfg(test)]
-extern crate tempfile;
-extern crate boxcars;
-extern crate failure;
-extern crate globset;
-extern crate rayon;
-extern crate serde_json;
-extern crate structopt;
-
 use boxcars::{CrcCheck, NetworkParse, ParserBuilder, Replay};
 use failure::{err_msg, Error, ResultExt};
 use globset::Glob;
@@ -79,11 +64,13 @@ fn parse_replay<'a>(opt: &Opt, data: &'a [u8]) -> Result<Replay<'a>, Error> {
             CrcCheck::Always
         } else {
             CrcCheck::OnError
-        }).with_network_parse(if opt.body {
+        })
+        .with_network_parse(if opt.body {
             NetworkParse::Always
         } else {
             NetworkParse::Never
-        }).parse()
+        })
+        .parse()
 }
 
 /// Each file argument that we get could be a directory so we need to expand that directory and
@@ -118,12 +105,14 @@ fn expand_paths(files: &[String]) -> Result<Vec<Vec<String>>, Error> {
                             }
                             Err(e) => Some(Err(e)),
                         }
-                    }).collect();
+                    })
+                    .collect();
                 Ok(files?)
             } else {
                 Ok(vec![x.clone()])
             }
-        }).collect()
+        })
+        .collect()
 }
 
 fn parse_multiple_replays(opt: &Opt) -> Result<(), Error> {
@@ -151,12 +140,13 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), Error> {
                     .with_context(|_e| format!("Could not serialize replay {}", file))?;
             }
             Ok(())
-        }).collect();
+        })
+        .collect();
     res?;
     Ok(())
 }
 
-fn serialize<W: Write>(opt: &Opt, writer: W, replay: &Replay) -> Result<(), serde_json::Error> {
+fn serialize<W: Write>(opt: &Opt, writer: W, replay: &Replay<'_>) -> Result<(), serde_json::Error> {
     if opt.pretty {
         serde_json::to_writer_pretty(writer, &replay)
     } else {
@@ -175,7 +165,9 @@ fn run() -> Result<(), Error> {
     } else {
         let data = if opt.input.is_empty() {
             let mut d = Vec::new();
-            io::stdin().read_to_end(&mut d).context("Could not read stdin")?;
+            io::stdin()
+                .read_to_end(&mut d)
+                .context("Could not read stdin")?;
             d
         } else {
             let file = &opt.input[0];
@@ -223,7 +215,9 @@ mod tests {
             .assert()
             .failure()
             .code(1)
-            .stderr(predicate::str::contains("Could not open rocket league file: non-exist/assets/fuzz-string-too-long.replay"));
+            .stderr(predicate::str::contains(
+                "Could not open rocket league file: non-exist/assets/fuzz-string-too-long.replay",
+            ));
     }
 
     #[test]
@@ -240,8 +234,12 @@ mod tests {
             .assert()
             .failure()
             .code(1)
-            .stderr(predicate::str::contains("Could not parse: assets/fuzz-string-too-long.replay"))
-            .stderr(predicate::str::contains("Crc mismatch. Expected 3765941959 but received 1825689991"));
+            .stderr(predicate::str::contains(
+                "Could not parse: assets/fuzz-string-too-long.replay",
+            ))
+            .stderr(predicate::str::contains(
+                "Crc mismatch. Expected 3765941959 but received 1825689991",
+            ));
     }
 
     #[test]
@@ -251,7 +249,9 @@ mod tests {
             .args(&["-n", "assets/replays/1ec9.replay"])
             .assert()
             .success()
-            .stdout(predicate::str::contains(r#"{"header_size":1944,"header_crc":3561912561"#));
+            .stdout(predicate::str::contains(
+                r#"{"header_size":1944,"header_crc":3561912561"#,
+            ));
     }
 
     #[test]
@@ -264,7 +264,9 @@ mod tests {
             .unwrap()
             .assert()
             .success()
-            .stdout(predicate::str::contains(r#"{"header_size":1944,"header_crc":3561912561"#));
+            .stdout(predicate::str::contains(
+                r#"{"header_size":1944,"header_crc":3561912561"#,
+            ));
     }
 
     #[test]
