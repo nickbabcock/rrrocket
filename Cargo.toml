@@ -6,13 +6,14 @@ repository = "https://github.com/nickbabcock/boxcars"
 version = "0.4.2-pre"
 publish = false
 description = "Rocket League Replay parser to JSON CLI app"
+edition = "2018"
 
 [dependencies]
-failure = "0.1.5"
+snafu = "0.5.0"
 serde_json = "1"
 structopt = "0.3"
 rayon = "1"
-boxcars = "0.3.5"
+boxcars = "0.4.1"
 globset = "0.4"
 
 [dev-dependencies]
