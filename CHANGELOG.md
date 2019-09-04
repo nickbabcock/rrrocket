@@ -1,3 +1,9 @@
+## v0.4.2 - September 4th 2019
+
+* Update replay parser to latest version:
+  * Support for patch v1.66 games
+  * Include attribute object id on actor update, so now one can more easily derive the attribute's name with `replay.objects[attribute.object_id]`
+
 ## v0.4.1 - August 13th 2019
 
 * Update replay parser to latest version:
