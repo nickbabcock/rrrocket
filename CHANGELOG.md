@@ -1,3 +1,7 @@
+## v0.4.3 - September 9th 2019
+
+* Update replay parser to latest version (boxcars v0.5.0), which brings a nice performance boost when asked to calculate crc or checking against a corrupted replay
+
 ## v0.4.2 - September 4th 2019
 
 * Update replay parser to latest version:
