@@ -81,7 +81,7 @@ fn read_file(input: &str) -> Result<Vec<u8>, RocketError> {
     fs::read(input).context(ReadReplay { path: input })
 }
 
-fn parse_replay<'a>(opt: &Opt, data: &'a [u8]) -> Result<Replay<'a>, ParseError> {
+fn parse_replay(opt: &Opt, data: &[u8]) -> Result<Replay, ParseError> {
     ParserBuilder::new(&data[..])
         .with_crc_check(if opt.crc {
             CrcCheck::Always
@@ -168,7 +168,7 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
     Ok(())
 }
 
-fn serialize<W: Write>(opt: &Opt, writer: W, replay: &Replay<'_>) -> Result<(), serde_json::Error> {
+fn serialize<W: Write>(opt: &Opt, writer: W, replay: &Replay) -> Result<(), serde_json::Error> {
     if opt.pretty {
         serde_json::to_writer_pretty(writer, &replay)
     } else {
