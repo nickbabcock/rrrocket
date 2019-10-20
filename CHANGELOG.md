@@ -1,3 +1,12 @@
+## v0.4.4 - October 20th 2019
+
+* Update replay parser for latest replays:
+  * v1.68 replays
+  * Parse replays with QQ ids
+  * Parse replays from the tutorial
+  * Parse replays with the anniversary ball
+  * Parse replays that contain a ps4 platform id in the header
+
 ## v0.4.3 - September 9th 2019
 
 * Update replay parser to latest version (boxcars v0.5.0), which brings a nice performance boost when asked to calculate crc or checking against a corrupted replay
