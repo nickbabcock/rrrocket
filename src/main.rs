@@ -1,12 +1,14 @@
-use boxcars::{CrcCheck, NetworkParse, ParserBuilder, Replay, ParseError};
+use boxcars::{CrcCheck, NetworkParse, ParseError, ParserBuilder, Replay};
 use globset::Glob;
 use rayon::prelude::*;
+use serde::Serialize;
+use snafu::{ErrorCompat, ResultExt, Snafu};
 use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufWriter};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::channel;
 use structopt::StructOpt;
-use snafu::{Snafu, ResultExt, ErrorCompat};
 
 #[derive(Debug, Snafu)]
 enum RocketError {
@@ -20,20 +22,23 @@ enum RocketError {
     ParseReplay {
         #[snafu(source(from(ParseError, Box::new)))]
         source: Box<ParseError>,
-        path: PathBuf
+        path: PathBuf,
     },
 
     #[snafu(display("Could not open json output file {}: {}", path.display(), source))]
     OpenOutput { source: io::Error, path: PathBuf },
 
     #[snafu(display("Could not serialize replay {}: {}", path.display(), source))]
-    JsonSerialization { source: serde_json::Error, path: PathBuf },
+    JsonSerialization {
+        source: serde_json::Error,
+        path: PathBuf,
+    },
 
     #[snafu(display("Expected one input file --multiple is not specified"))]
     InputArguments,
 
     #[snafu(display("Could not read stdin: {}", source))]
-    ReadStdin { source: io::Error }
+    ReadStdin { source: io::Error },
 }
 
 #[derive(StructOpt, Debug, Clone, PartialEq)]
@@ -70,11 +75,24 @@ struct Opt {
     )]
     pretty: bool,
 
+    #[structopt(
+        short = "j",
+        long = "json-lines",
+        help = "output multiple files to stdout via json lines"
+    )]
+    json_lines: bool,
+
     #[structopt(long = "dry-run", help = "parses but does not write JSON output")]
     dry_run: bool,
 
     #[structopt(help = "Rocket League replay files")]
     input: Vec<String>,
+}
+
+#[derive(Serialize, Debug)]
+struct RocketReplay<'a> {
+    file: &'a str,
+    replay: Replay,
 }
 
 fn read_file(input: &str) -> Result<Vec<u8>, RocketError> {
@@ -127,7 +145,10 @@ fn expand_paths(files: &[String]) -> Result<Vec<Vec<String>>, RocketError> {
                                     None
                                 }
                             }
-                            Err(e) => Some(Err(RocketError::ReadReplay { source: e, path: p.to_path_buf() }))
+                            Err(e) => Some(Err(RocketError::ReadReplay {
+                                source: e,
+                                path: p.to_path_buf(),
+                            })),
                         }
                     })
                     .collect();
@@ -140,16 +161,48 @@ fn expand_paths(files: &[String]) -> Result<Vec<Vec<String>>, RocketError> {
 }
 
 fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
-    let res: Result<Vec<()>, RocketError> = expand_paths(&opt.input)?
+    let files = expand_paths(&opt.input)?
         .into_iter()
         .flat_map(|x| x)
-        .collect::<Vec<_>>()
-        .par_iter()
-        .map(|file| {
-            let data = read_file(file)?;
-            let replay = parse_replay(opt, &data[..]).context(ParseReplay { path: file })?;
+        .collect::<Vec<String>>();
+    let res = files.par_iter().map(|file| {
+        let data = read_file(file)?;
+        let replay = parse_replay(opt, &data[..]).context(ParseReplay { path: file })?;
+        Ok((file, replay))
+    });
 
-            if !opt.dry_run {
+    if opt.dry_run {
+        res.map(|x| x.map(|_| ()))
+            .collect::<Result<Vec<()>, RocketError>>()?;
+        Ok(())
+    } else if opt.json_lines {
+        let (tx, rx) = channel();
+        let lines = res
+            .map_with(tx, |s, parse_result| {
+                parse_result.map(|(file, replay)| {
+                    let rep = RocketReplay { file, replay };
+                    let json =
+                        serde_json::to_string(&rep).context(JsonSerialization { path: file });
+                    let _ = s.send(json);
+                })
+            })
+            .collect::<Result<Vec<()>, RocketError>>();
+
+        let stdout = io::stdout();
+        let lock = stdout.lock();
+        let mut writer = BufWriter::new(lock);
+        for line in rx {
+            if let Ok(json) = line {
+                let _ = writeln!(writer, "{}", json);
+                let _ = writer.flush();
+            }
+        }
+
+        lines?;
+        Ok(())
+    } else {
+        res.map(|parse_result| {
+            parse_result.and_then(|(file, replay)| {
                 let outfile = format!("{}.json", file);
                 let fout = OpenOptions::new()
                     .write(true)
@@ -157,15 +210,13 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
                     .truncate(true)
                     .open(&outfile)
                     .context(OpenOutput { path: outfile })?;
-
                 let mut writer = BufWriter::new(fout);
-                serialize(opt, &mut writer, &replay).context(JsonSerialization { path: file })?;
-            }
-            Ok(())
+                serialize(opt, &mut writer, &replay).context(JsonSerialization { path: file })
+            })
         })
-        .collect();
-    res?;
-    Ok(())
+        .collect::<Result<Vec<()>, RocketError>>()?;
+        Ok(())
+    }
 }
 
 fn serialize<W: Write>(opt: &Opt, writer: W, replay: &Replay) -> Result<(), serde_json::Error> {
@@ -185,9 +236,7 @@ fn run() -> Result<(), RocketError> {
     } else {
         let data = if opt.input.is_empty() {
             let mut d = Vec::new();
-            io::stdin()
-                .read_to_end(&mut d)
-                .context(ReadStdin)?;
+            io::stdin().read_to_end(&mut d).context(ReadStdin)?;
             d
         } else {
             let file = &opt.input[0];
@@ -198,7 +247,8 @@ fn run() -> Result<(), RocketError> {
         if !opt.dry_run {
             let stdout = io::stdout();
             let lock = stdout.lock();
-            serialize(&opt, BufWriter::new(lock), &replay).context(JsonSerialization { path: "stdout" })?;
+            serialize(&opt, BufWriter::new(lock), &replay)
+                .context(JsonSerialization { path: "stdout" })?;
         }
         Ok(())
     }
@@ -304,5 +354,24 @@ mod tests {
             .success();
 
         assert!(replays_path.join("1ec9.replay.json").as_path().exists());
+    }
+
+    #[test]
+    fn test_directory_in_json_lines() {
+        let dir = tempdir().unwrap();
+        let options = fs_extra::dir::CopyOptions::new();
+        let replays_path = dir.path().join("replays");
+        let path = replays_path.to_str().unwrap().to_owned();
+        fs_extra::dir::copy("assets/replays", dir.path(), &options).unwrap();
+
+        Command::cargo_bin("rrrocket")
+            .unwrap()
+            .args(&["-n", "-j", "-m", &path])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                r#"{"header_size":1944,"header_crc":3561912561"#,
+            ))
+            .stdout(predicate::str::contains("\n"));
     }
 }
