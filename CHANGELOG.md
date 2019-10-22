@@ -1,3 +1,7 @@
+## v0.5.0 - October 21th 2019
+
+Previously if one wanted replay data sent to stdout, they could only parse a single file at a time. This is no longer the case with the combination of `--multiple` and `--json-lines`. When a directory and / or multiple replays are provided on the command line, each replay will print its content on a single line. This format is called [json lines](http://jsonlines.org/). `--pretty` is ineffective when `--multiple --json-lines` is used.
+
 ## v0.4.4 - October 20th 2019
 
 * Update replay parser for latest replays:
