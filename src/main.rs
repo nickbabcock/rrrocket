@@ -64,7 +64,7 @@ struct Opt {
     #[structopt(
         short = "m",
         long = "multiple",
-        help = "parse multiple replays, instead of writing JSON to stdout, write to a sibling JSON file"
+        help = "parse multiple replays in provided directories. Defaults to writing to a sibling JSON file, but can output to stdout with --json-lines"
     )]
     multiple: bool,
 
