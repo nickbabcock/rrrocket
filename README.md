@@ -17,6 +17,8 @@ Download the appropriate bundle from the [releases page](https://github.com/nick
 ## Usage
 
 ```
+Parses Rocket League replay files and outputs JSON with decoded information
+
 USAGE:
     rrrocket [FLAGS] [input]...
 
@@ -25,7 +27,10 @@ FLAGS:
     -c, --crc-check        forces a crc check for corruption even when replay was successfully parsed
         --dry-run          parses but does not write JSON output
     -h, --help             Prints help information
-    -m, --multiple         parse multiple replays, instead of writing JSON to stdout, write to a sibling JSON file
+    -j, --json-lines       output multiple files to stdout via json lines
+    -m, --multiple         parse multiple replays in provided directories. Defaults to writing to a sibling JSON file,
+                           but can output to stdout with --json-lines
+    -p, --pretty           output replay as pretty-printed JSON
     -V, --version          Prints version information
 
 ARGS:
@@ -82,6 +87,33 @@ If network parsed is enabled then an attribute (snipped) looks something like:
     }
   }
 }
+```
+
+## Queries with jq
+
+Since rrrocket outputs json, [jq](https://stedolan.github.io/jq/) is a natural query tool. Here are some questions that rrrocket and jq can answer together.
+
+Want to find out which non 3v3 games had a score difference greater than 2?
+
+```
+rrrocket --json-lines --multiple ~/projects/boxcars/assets/replays/good/ \
+  | jq -c 'if (.replay.properties.TeamSize != 3 and
+      (((.replay.properties.Team0Score // 0) - (.replay.properties.Team1Score // 0) | length) > 2)) then .file else empty end'
+```
+
+Top combined score?
+
+```
+rrrocket --json-lines --multiple ~/projects/boxcars/assets/replays/good/ \
+  | jq -c  '{(.file): (.replay.properties.Team0Score // 0 + .replay.properties.Team1Score // 0)}' \
+  | sort -n -k2 -t ':'
+```
+
+Games with certain attributes?
+
+```
+rrrocket --json-lines --multiple ~/projects/boxcars/assets/replays/good/ \
+  | jq -c 'if (.replay.objects | contains(["Archetypes.Ball.Ball_Breakout"])) then .file else empty end'
 ```
 
 ## boxcapy
