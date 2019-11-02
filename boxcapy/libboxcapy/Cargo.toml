@@ -1,0 +1,16 @@
+[package]
+name = "libboxcapy"
+version = "0.1.0"
+authors = ["Nick Babcock <nbabcock19@hotmail.com>"]
+edition = "2018"
+
+[lib]
+name = "libboxcapy"
+crate-type = ["dylib"]
+
+[dependencies]
+boxcars = "0.5.2"
+
+[dependencies.pyo3]
+version = "0.8.1"
+features = ["extension-module"]
