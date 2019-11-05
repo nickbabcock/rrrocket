@@ -1,5 +1,5 @@
 use boxcars::{CrcCheck, NetworkParse, ParseError, ParserBuilder, Replay};
-use globset::Glob;
+use glob::glob;
 use rayon::prelude::*;
 use serde::Serialize;
 use snafu::{ErrorCompat, ResultExt, Snafu};
@@ -24,6 +24,9 @@ enum RocketError {
         source: Box<ParseError>,
         path: PathBuf,
     },
+
+    #[snafu(display("Unable to form glob from {}: {}", path, source))]
+    InvalidGlob { source: glob::PatternError, path: String },
 
     #[snafu(display("Could not open json output file {}: {}", path.display(), source))]
     OpenOutput { source: io::Error, path: PathBuf },
@@ -117,42 +120,28 @@ fn parse_replay(opt: &Opt, data: &[u8]) -> Result<Replay, ParseError> {
 /// Each file argument that we get could be a directory so we need to expand that directory and
 /// find all the *.replay files. File arguments turn into single element vectors.
 fn expand_paths(files: &[String]) -> Result<Vec<Vec<String>>, RocketError> {
-    let glob = Glob::new("*.replay").unwrap().compile_matcher();
-
     files
         .iter()
         .map(|x| {
             let p = Path::new(x);
             if p.is_dir() {
-                // If the commandline argument is a directory we look for all files that match
-                // *.replay. A file that does not match the pattern because of an error reading the
-                // directory / file will not be filtered and will cause the error to bubble up. In
-                // the future, we could get smart and ignore directories / files we don't have
-                // permission that wouldn't match the pattern anyways
-                let files: Result<Vec<_>, _> = p
-                    .read_dir()
-                    .context(ReadDir { path: p })?
-                    .filter_map(|entry| {
-                        match entry {
-                            Ok(y) => {
-                                if glob.is_match(y.path()) {
-                                    // Force UTF-8. There is a special place in the fourth circle
-                                    // of inferno for people who rename their rocket league replays
-                                    // to not contain UTF-8. We won't panic, but will cause an
-                                    // error when the file is attempted to be read.
-                                    Some(Ok(y.path().to_string_lossy().into_owned()))
-                                } else {
-                                    None
-                                }
-                            }
-                            Err(e) => Some(Err(RocketError::ReadReplay {
-                                source: e,
-                                path: p.to_path_buf(),
-                            })),
+                let dir_path = format!("{}/**/*.replay", x);
+                let replays = glob(&dir_path).map_err(|e| RocketError::InvalidGlob {
+                    source: e,
+                    path: x.to_string(),
+                })?;
+
+                let files = replays
+                    .inspect(|file| {
+                        if let Err(ref e) = file {
+                            println!("Unable to inspect: {}", e)
                         }
                     })
+                    .flat_map(Result::ok)
+                    .filter(|x| !x.is_dir())
+                    .map(|x| x.to_string_lossy().into_owned())
                     .collect();
-                Ok(files?)
+                Ok(files)
             } else {
                 Ok(vec![x.clone()])
             }
@@ -372,6 +361,26 @@ mod tests {
             .stdout(predicate::str::contains(
                 r#"{"header_size":1944,"header_crc":3561912561"#,
             ))
-            .stdout(predicate::str::contains("\n"));
+            .stdout(predicate::str::contains("\n").count(1));
+    }
+
+    #[test]
+    fn test_directory_in_json_lines_nested() {
+        let dir = tempdir().unwrap();
+        let options = fs_extra::dir::CopyOptions::new();
+        let replays_path = dir.path().join("replays");
+        let path = replays_path.to_str().unwrap().to_owned();
+        fs_extra::dir::copy("assets/replays", dir.path(), &options).unwrap();
+        fs_extra::dir::copy("assets/replays", replays_path, &options).unwrap();
+
+        Command::cargo_bin("rrrocket")
+            .unwrap()
+            .args(&["-n", "-j", "-m", &path])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                r#"{"header_size":1944,"header_crc":3561912561"#,
+            ).count(2))
+            .stdout(predicate::str::contains("\n").count(2));
     }
 }

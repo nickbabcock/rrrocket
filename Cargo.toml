@@ -15,7 +15,7 @@ serde_json = "1"
 structopt = "0.3"
 rayon = "1"
 boxcars = "0.5"
-globset = "0.4"
+glob = "0.3"
 
 [dev-dependencies]
 assert_cmd = "0.11"
