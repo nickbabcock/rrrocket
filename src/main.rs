@@ -1,6 +1,7 @@
 use boxcars::{CrcCheck, NetworkParse, ParseError, ParserBuilder, Replay};
 use glob::glob;
 use rayon::prelude::*;
+use rayon::iter::ParallelBridge;
 use serde::Serialize;
 use snafu::{ErrorCompat, ResultExt, Snafu};
 use std::fs::{self, OpenOptions};
@@ -25,8 +26,11 @@ enum RocketError {
         path: PathBuf,
     },
 
-    #[snafu(display("Unable to form glob from {}: {}", path, source))]
-    InvalidGlob { source: glob::PatternError, path: String },
+    #[snafu(display("Unable to form glob from {}: {}", path.display(), source))]
+    InvalidGlob { source: glob::PatternError, path: PathBuf },
+
+    #[snafu(display("Unable to form glob from {}: {}", source.path().display(), source))]
+    InvalidGlobRead { source: glob::GlobError },
 
     #[snafu(display("Could not open json output file {}: {}", path.display(), source))]
     OpenOutput { source: io::Error, path: PathBuf },
@@ -117,48 +121,72 @@ fn parse_replay(opt: &Opt, data: &[u8]) -> Result<Replay, ParseError> {
         .parse()
 }
 
+fn expand_directory(dir: &Path) -> impl Iterator<Item = Result<PathBuf, RocketError>> + '_ {
+    let dir_glob_fmt = format!("{}/**/*.replay", dir.display());
+    let replays = glob(&dir_glob_fmt).map_err(|e| RocketError::InvalidGlob {
+        source: e,
+        path: dir.to_path_buf(),
+    });
+
+    match replays {
+        Err(e) => either::Either::Left(std::iter::once(Err(e))),
+        Ok(replays) => {
+            let res = replays
+                .inspect(|file| {
+                    if let Err(ref e) = file {
+                        println!("Unable to inspect: {}", e)
+                    }
+                })
+                .filter_map(|x| {
+                    if let Ok(pth) = x {
+                        if pth.is_file() {
+                            Some(Ok(pth.clone()))
+                        } else {
+                            None
+                        }
+                    } else {
+                        let err = x.map_err(|e| RocketError::InvalidGlobRead {
+                            source: e,
+                        });
+                        Some(err)
+                    }
+                });
+            either::Either::Right(res)
+        }
+    }
+}
+
 /// Each file argument that we get could be a directory so we need to expand that directory and
 /// find all the *.replay files. File arguments turn into single element vectors.
-fn expand_paths(files: &[String]) -> Result<Vec<Vec<String>>, RocketError> {
+fn expand_paths(files: &[String]) -> impl Iterator<Item = Result<String, RocketError>> + '_ {
     files
         .iter()
-        .map(|x| {
-            let p = Path::new(x);
-            if p.is_dir() {
-                let dir_path = format!("{}/**/*.replay", x);
-                let replays = glob(&dir_path).map_err(|e| RocketError::InvalidGlob {
-                    source: e,
-                    path: x.to_string(),
-                })?;
-
-                let files = replays
-                    .inspect(|file| {
-                        if let Err(ref e) = file {
-                            println!("Unable to inspect: {}", e)
-                        }
-                    })
-                    .flat_map(Result::ok)
-                    .filter(|x| !x.is_dir())
-                    .map(|x| x.to_string_lossy().into_owned())
-                    .collect();
-                Ok(files)
+        .map(|arg_file| {
+            let p = Path::new(arg_file);
+            if p.is_file() {
+               either::Either::Left(std::iter::once(Ok(p.to_path_buf())))
             } else {
-                Ok(vec![x.clone()])
+               either::Either::Right(expand_directory(&p))
             }
         })
-        .collect()
+        .flatten()
+        .map(|x| x.map(|y| y.as_path().to_string_lossy().into_owned()))
 }
 
 fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
-    let files = expand_paths(&opt.input)?
-        .into_iter()
-        .flat_map(|x| x)
-        .collect::<Vec<String>>();
-    let res = files.par_iter().map(|file| {
-        let data = read_file(file)?;
-        let replay = parse_replay(opt, &data[..]).context(ParseReplay { path: file })?;
-        Ok((file, replay))
-    });
+    let res = expand_paths(&opt.input)
+        .inspect(|file| {
+            if let Err(ref e) = file {
+                println!("Unable to inspect: {}", e)
+            }
+        })
+        .flat_map(Result::ok)
+        .par_bridge()
+        .map(|file| {
+            let data = read_file(&file)?;
+            let replay = parse_replay(opt, &data[..]).context(ParseReplay { path: &file })?;
+            Ok((file, replay))
+        });
 
     if opt.dry_run {
         res.map(|x| x.map(|_| ()))
@@ -169,7 +197,7 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
         let lines = res
             .map_with(tx, |s, parse_result| {
                 parse_result.map(|(file, replay)| {
-                    let rep = RocketReplay { file, replay };
+                    let rep = RocketReplay { file: &file, replay };
                     let json =
                         serde_json::to_string(&rep).context(JsonSerialization { path: file });
                     let _ = s.send(json);
