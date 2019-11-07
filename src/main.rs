@@ -8,7 +8,6 @@ use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufWriter};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::channel;
 use structopt::StructOpt;
 
 #[derive(Debug, Snafu)]
@@ -210,35 +209,38 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
         .collect::<()>();
         Ok(())
     } else if opt.json_lines {
-        let (tx, rx) = channel();
-        let lines = res
-            .map_with(tx, |s, parse_result| {
-                parse_result.map(|(file, replay)| {
-                    let rep = RocketReplay {
-                        file: &file,
-                        replay,
-                    };
-                    let json =
-                        serde_json::to_string(&rep).context(JsonSerialization { path: file });
-
-                    if let Err(ref e) = s.send(json) {
-                        eprintln!("internal rrrocket channel error: {}", e)
-                    }
-                })
+        let json_lines = res.map(|parse_result| {
+            parse_result.and_then(|(file, replay)| {
+                let rep = RocketReplay {
+                    file: &file,
+                    replay,
+                };
+                serde_json::to_string(&rep).context(JsonSerialization { path: file })
             })
-            .collect::<Result<(), RocketError>>();
+        });
 
-        let stdout = io::stdout();
-        let lock = stdout.lock();
-        let mut writer = BufWriter::new(lock);
-        for line in rx {
-            if let Ok(json) = line {
-                let _ = writeln!(writer, "{}", json);
-                let _ = writer.flush();
+        let (send, recv) = std::sync::mpsc::sync_channel(rayon::current_num_threads());
+        let thrd = std::thread::spawn(|| {
+            let stdout = io::stdout();
+            let lock = stdout.lock();
+            let mut writer = BufWriter::new(lock);
+            for line in recv.into_iter() {
+                if let Ok(json) = line {
+                    let _ = writeln!(writer, "{}", json);
+                    let _ = writer.flush();
+                }
             }
+        });
+
+        let send = json_lines.try_for_each_with(send, |s, x| s.send(x));
+        if let Err(ref e) = send {
+            eprintln!("Unable to send internal data: {:?}", e);
         }
 
-        lines?;
+        if let Err(ref e) = thrd.join() {
+            eprintln!("Unable to join internal thread: {:?}", e);
+        }
+
         Ok(())
     } else {
         res.map(|parse_result| {
