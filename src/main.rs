@@ -1,5 +1,6 @@
 use boxcars::{CrcCheck, NetworkParse, ParseError, ParserBuilder, Replay};
-use globset::Glob;
+use glob::glob;
+use rayon::iter::ParallelBridge;
 use rayon::prelude::*;
 use serde::Serialize;
 use snafu::{ErrorCompat, ResultExt, Snafu};
@@ -7,7 +8,6 @@ use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufWriter};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::channel;
 use structopt::StructOpt;
 
 #[derive(Debug, Snafu)]
@@ -24,6 +24,15 @@ enum RocketError {
         source: Box<ParseError>,
         path: PathBuf,
     },
+
+    #[snafu(display("Unable to form glob from {}: {}", path.display(), source))]
+    InvalidGlob {
+        source: glob::PatternError,
+        path: PathBuf,
+    },
+
+    #[snafu(display("Unable to form glob from {}: {}", source.path().display(), source))]
+    InvalidGlobRead { source: glob::GlobError },
 
     #[snafu(display("Could not open json output file {}: {}", path.display(), source))]
     OpenOutput { source: io::Error, path: PathBuf },
@@ -86,17 +95,32 @@ struct Opt {
     dry_run: bool,
 
     #[structopt(help = "Rocket League replay files")]
-    input: Vec<String>,
+    input: Vec<PathBuf>,
 }
 
 #[derive(Serialize, Debug)]
 struct RocketReplay<'a> {
-    file: &'a str,
+    file: &'a PathBuf,
     replay: Replay,
 }
 
-fn read_file(input: &str) -> Result<Vec<u8>, RocketError> {
-    fs::read(input).context(ReadReplay { path: input })
+fn read_file(opt: &Opt, file_path: PathBuf) -> Result<(PathBuf, Replay), RocketError> {
+    // Try to mmap the file first so we don't have to worry about potentially allocating a large
+    // buffer in case there is like a 10GB iso file that ends in .replay
+    let f = fs::File::open(&file_path).context(ReadReplay { path: &file_path })?;
+    let mmap = unsafe { memmap::MmapOptions::new().map(&f) };
+    match mmap {
+        Ok(data) => {
+            let replay = parse_replay(opt, &data).context(ParseReplay { path: &file_path })?;
+            Ok((file_path, replay))
+        }
+        Err(_) => {
+            // If the mmap fails, just try reading the file
+            let data = fs::read(&file_path).context(ReadReplay { path: &file_path })?;
+            let replay = parse_replay(opt, &data).context(ParseReplay { path: &file_path })?;
+            Ok((file_path, replay))
+        }
+    }
 }
 
 fn parse_replay(opt: &Opt, data: &[u8]) -> Result<Replay, ParseError> {
@@ -114,96 +138,114 @@ fn parse_replay(opt: &Opt, data: &[u8]) -> Result<Replay, ParseError> {
         .parse()
 }
 
+fn expand_directory(dir: &Path) -> impl Iterator<Item = Result<PathBuf, RocketError>> {
+    let dir_glob_fmt = format!("{}/**/*.replay", dir.display());
+    let replays = glob(&dir_glob_fmt).map_err(|e| RocketError::InvalidGlob {
+        source: e,
+        path: dir.to_path_buf(),
+    });
+
+    match replays {
+        Err(e) => either::Either::Left(std::iter::once(Err(e))),
+        Ok(replays) => {
+            let res = replays
+                .inspect(|file| {
+                    if let Err(ref e) = file {
+                        eprintln!("Unable to inspect: {}", e)
+                    }
+                })
+                .filter_map(|x| {
+                    if let Ok(pth) = x {
+                        if pth.is_file() {
+                            Some(Ok(pth))
+                        } else {
+                            None
+                        }
+                    } else {
+                        let err = x.map_err(|e| RocketError::InvalidGlobRead { source: e });
+                        Some(err)
+                    }
+                });
+            either::Either::Right(res)
+        }
+    }
+}
+
 /// Each file argument that we get could be a directory so we need to expand that directory and
 /// find all the *.replay files. File arguments turn into single element vectors.
-fn expand_paths(files: &[String]) -> Result<Vec<Vec<String>>, RocketError> {
-    let glob = Glob::new("*.replay").unwrap().compile_matcher();
-
+fn expand_paths<'a>(
+    files: &'a [PathBuf],
+) -> impl Iterator<Item = Result<PathBuf, RocketError>> + 'a {
     files
         .iter()
-        .map(|x| {
-            let p = Path::new(x);
-            if p.is_dir() {
-                // If the commandline argument is a directory we look for all files that match
-                // *.replay. A file that does not match the pattern because of an error reading the
-                // directory / file will not be filtered and will cause the error to bubble up. In
-                // the future, we could get smart and ignore directories / files we don't have
-                // permission that wouldn't match the pattern anyways
-                let files: Result<Vec<_>, _> = p
-                    .read_dir()
-                    .context(ReadDir { path: p })?
-                    .filter_map(|entry| {
-                        match entry {
-                            Ok(y) => {
-                                if glob.is_match(y.path()) {
-                                    // Force UTF-8. There is a special place in the fourth circle
-                                    // of inferno for people who rename their rocket league replays
-                                    // to not contain UTF-8. We won't panic, but will cause an
-                                    // error when the file is attempted to be read.
-                                    Some(Ok(y.path().to_string_lossy().into_owned()))
-                                } else {
-                                    None
-                                }
-                            }
-                            Err(e) => Some(Err(RocketError::ReadReplay {
-                                source: e,
-                                path: p.to_path_buf(),
-                            })),
-                        }
-                    })
-                    .collect();
-                Ok(files?)
+        .map(|arg_file| {
+            let p = Path::new(arg_file);
+            if p.is_file() {
+                either::Either::Left(std::iter::once(Ok(p.to_path_buf())))
             } else {
-                Ok(vec![x.clone()])
+                either::Either::Right(expand_directory(&p))
             }
         })
-        .collect()
+        .flatten()
 }
 
 fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
-    let files = expand_paths(&opt.input)?
-        .into_iter()
-        .flat_map(|x| x)
-        .collect::<Vec<String>>();
-    let res = files.par_iter().map(|file| {
-        let data = read_file(file)?;
-        let replay = parse_replay(opt, &data[..]).context(ParseReplay { path: file })?;
-        Ok((file, replay))
-    });
+    let res = expand_paths(&opt.input)
+        .inspect(|file| {
+            if let Err(ref e) = file {
+                eprintln!("Unable to inspect: {}", e)
+            }
+        })
+        .flat_map(Result::ok)
+        .par_bridge()
+        .map(|file_path| read_file(opt, file_path));
 
     if opt.dry_run {
-        res.map(|x| x.map(|_| ()))
-            .collect::<Result<Vec<()>, RocketError>>()?;
+        res.inspect(|parse_result| match parse_result {
+            Ok((file, _replay)) => println!("Parsed {}", file.display()),
+            Err(ref e) => eprintln!("Failed {}", e),
+        })
+        .map(|_| ())
+        .collect::<()>();
         Ok(())
     } else if opt.json_lines {
-        let (tx, rx) = channel();
-        let lines = res
-            .map_with(tx, |s, parse_result| {
-                parse_result.map(|(file, replay)| {
-                    let rep = RocketReplay { file, replay };
-                    let json =
-                        serde_json::to_string(&rep).context(JsonSerialization { path: file });
-                    let _ = s.send(json);
-                })
+        let json_lines = res.map(|parse_result| {
+            parse_result.and_then(|(file, replay)| {
+                let rep = RocketReplay {
+                    file: &file,
+                    replay,
+                };
+                serde_json::to_string(&rep).context(JsonSerialization { path: file })
             })
-            .collect::<Result<Vec<()>, RocketError>>();
+        });
 
-        let stdout = io::stdout();
-        let lock = stdout.lock();
-        let mut writer = BufWriter::new(lock);
-        for line in rx {
-            if let Ok(json) = line {
-                let _ = writeln!(writer, "{}", json);
-                let _ = writer.flush();
+        let (send, recv) = std::sync::mpsc::sync_channel(rayon::current_num_threads());
+        let thrd = std::thread::spawn(|| {
+            let stdout = io::stdout();
+            let lock = stdout.lock();
+            let mut writer = BufWriter::new(lock);
+            for line in recv.into_iter() {
+                if let Ok(json) = line {
+                    let _ = writeln!(writer, "{}", json);
+                    let _ = writer.flush();
+                }
             }
+        });
+
+        let send = json_lines.try_for_each_with(send, |s, x| s.send(x));
+        if let Err(ref e) = send {
+            eprintln!("Unable to send internal data: {:?}", e);
         }
 
-        lines?;
+        if let Err(ref e) = thrd.join() {
+            eprintln!("Unable to join internal thread: {:?}", e);
+        }
+
         Ok(())
     } else {
         res.map(|parse_result| {
             parse_result.and_then(|(file, replay)| {
-                let outfile = format!("{}.json", file);
+                let outfile = format!("{}.json", file.display());
                 let fout = OpenOptions::new()
                     .write(true)
                     .create(true)
@@ -214,7 +256,7 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
                 serialize(opt, &mut writer, &replay).context(JsonSerialization { path: file })
             })
         })
-        .collect::<Result<Vec<()>, RocketError>>()?;
+        .collect::<Result<(), RocketError>>()?;
         Ok(())
     }
 }
@@ -234,16 +276,16 @@ fn run() -> Result<(), RocketError> {
     } else if opt.input.len() > 1 {
         Err(RocketError::InputArguments)
     } else {
-        let data = if opt.input.is_empty() {
+        let replay = if opt.input.is_empty() {
             let mut d = Vec::new();
             io::stdin().read_to_end(&mut d).context(ReadStdin)?;
-            d
+            parse_replay(&opt, &d).context(ParseReplay { path: "stdin" })
         } else {
             let file = &opt.input[0];
-            read_file(file)?
-        };
+            let (_, replay) = read_file(&opt, file.clone())?;
+            Ok(replay)
+        }?;
 
-        let replay = parse_replay(&opt, &data[..]).context(ParseReplay { path: "stdin" })?;
         if !opt.dry_run {
             let stdout = io::stdout();
             let lock = stdout.lock();
@@ -302,8 +344,7 @@ mod tests {
                 "assets/fuzz-string-too-long.replay",
             ])
             .assert()
-            .failure()
-            .code(1)
+            .success()
             .stderr(predicate::str::contains(
                 "Unable to parse replay assets/fuzz-string-too-long.replay",
             ))
@@ -372,6 +413,26 @@ mod tests {
             .stdout(predicate::str::contains(
                 r#"{"header_size":1944,"header_crc":3561912561"#,
             ))
-            .stdout(predicate::str::contains("\n"));
+            .stdout(predicate::str::contains("\n").count(1));
+    }
+
+    #[test]
+    fn test_directory_in_json_lines_nested() {
+        let dir = tempdir().unwrap();
+        let options = fs_extra::dir::CopyOptions::new();
+        let replays_path = dir.path().join("replays");
+        let path = replays_path.to_str().unwrap().to_owned();
+        fs_extra::dir::copy("assets/replays", dir.path(), &options).unwrap();
+        fs_extra::dir::copy("assets/replays", replays_path, &options).unwrap();
+
+        Command::cargo_bin("rrrocket")
+            .unwrap()
+            .args(&["-n", "-j", "-m", &path])
+            .assert()
+            .success()
+            .stdout(
+                predicate::str::contains(r#"{"header_size":1944,"header_crc":3561912561"#).count(2),
+            )
+            .stdout(predicate::str::contains("\n").count(2));
     }
 }
