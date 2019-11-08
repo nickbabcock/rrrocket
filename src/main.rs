@@ -233,11 +233,11 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
         });
 
         let send = json_lines.try_for_each_with(send, |s, x| s.send(x));
-        if let Err(ref e) = send {
+        if let Err(e) = send {
             eprintln!("Unable to send internal data: {:?}", e);
         }
 
-        if let Err(ref e) = thrd.join() {
+        if let Err(e) = thrd.join() {
             eprintln!("Unable to join internal thread: {:?}", e);
         }
 
