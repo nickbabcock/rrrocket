@@ -1,3 +1,12 @@
+## v0.6.0 - November 7th 2019
+
+- Recursively scan given directories when the `--multiple` flag is given
+- Lazily and iteratively scan the given directories when `--multiple` flag is given. Previous behavior would keep a buffer of all the files found
+- Mmap found files in case one has a 10GB iso file named `my-iso.replay`
+- Iteratively print json lines when `--multiple` and `--json-lines` are used.
+- Update to boxcars 0.6 for latest support of attributes
+- `--dry-run` with `--multiple` has been changed to print success when a file parses successfully and the error message of each file that failed to parse. It will now always return 0 in event of replay parsing failures.
+
 ## v0.5.0 - October 21th 2019
 
 Previously if one wanted replay data sent to stdout, they could only parse a single file at a time. This is no longer the case with the combination of `--multiple` and `--json-lines`. When a directory and / or multiple replays are provided on the command line, each replay will print its content on a single line. This format is called [json lines](http://jsonlines.org/). `--pretty` is ineffective when `--multiple --json-lines` is used.
