@@ -1,3 +1,11 @@
+## v0.6.1 - November 19th 2019
+
+* Update replay parser to latest version:
+  * Improved error messages
+  * Support decoding replays that contain duplicate object ids
+  * Support decoding RLCS / Lan replays
+  * Support decoding replays with many actors
+
 ## v0.6.0 - November 7th 2019
 
 - Recursively scan given directories when the `--multiple` flag is given
