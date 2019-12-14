@@ -309,9 +309,8 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use assert_cmd::prelude::*;
+    use assert_cmd::cmd::Command;
     use predicates::prelude::*;
-    use std::process::Command;
     use tempfile::tempdir;
 
     #[test]
@@ -370,8 +369,7 @@ mod tests {
         Command::cargo_bin("rrrocket")
             .unwrap()
             .args(&["-n"])
-            .with_stdin()
-            .path("assets/replays/1ec9.replay")
+            .pipe_stdin("assets/replays/1ec9.replay")
             .unwrap()
             .assert()
             .success()
