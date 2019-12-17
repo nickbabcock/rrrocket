@@ -211,13 +211,32 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
         .map(|file_path| read_file(opt, file_path));
 
     if opt.dry_run {
-        res.inspect(|parse_result| match parse_result {
-            Ok((file, _replay)) => println!("Parsed {}", file.display()),
-            Err(ref e) => eprintln!("Failed {}", e),
-        })
-        .map(|_| ())
-        .collect::<()>();
-        Ok(())
+        let (send, recv) = std::sync::mpsc::sync_channel(rayon::current_num_threads());
+        let thrd = std::thread::spawn(|| {
+            let stdout = io::stdout();
+            let lock = stdout.lock();
+            let mut writer = BufWriter::new(lock);
+            for parsed_replay in recv.into_iter() {
+                let res: Result<(PathBuf, Replay), RocketError> = parsed_replay;
+                match res {
+                    Ok((file, _replay)) => writeln!(&mut writer, "Parsed: {}", file.display())?,
+                    Err(e) => eprintln!("Failed {}", e),
+                }
+            }
+
+            Ok(())
+        });
+
+        // Ignore the send error as the receiver can hang up when it is no longer supposed to be
+        // writing to stdout (eg: broken pipe).
+        let _ = res.try_for_each_with(send, |s, x| s.send(x));
+        match thrd.join() {
+            Err(e) => {
+                eprintln!("Unable to join internal thread: {:?}", e);
+                Ok(())
+            }
+            Ok(x) => x.context(WriteStdout),
+        }
     } else if opt.json_lines {
         let json_lines = res.map(|parse_result| {
             parse_result.and_then(|(file, replay)| {
