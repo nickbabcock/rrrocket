@@ -4,11 +4,21 @@ use rayon::iter::ParallelBridge;
 use rayon::prelude::*;
 use serde::Serialize;
 use snafu::{ErrorCompat, ResultExt, Snafu};
+use std::error::Error;
 use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufWriter};
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
+
+#[derive(Debug, Snafu)]
+enum SerdeError {
+    #[snafu(display("serialization failed from an io error: {}", source))]
+    IoError { source: io::Error },
+
+    #[snafu(display("serialization failed: {}", source))]
+    OtherError { source: serde_json::Error },
+}
 
 #[derive(Debug, Snafu)]
 enum RocketError {
@@ -38,10 +48,7 @@ enum RocketError {
     OpenOutput { source: io::Error, path: PathBuf },
 
     #[snafu(display("Could not serialize replay {}: {}", path.display(), source))]
-    JsonSerialization {
-        source: serde_json::Error,
-        path: PathBuf,
-    },
+    JsonSerialization { source: SerdeError, path: PathBuf },
 
     #[snafu(display("Expected one input file --multiple is not specified"))]
     InputArguments,
@@ -215,7 +222,9 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
                     file: &file,
                     replay,
                 };
-                serde_json::to_string(&rep).context(JsonSerialization { path: file })
+                serde_json::to_string(&rep)
+                    .map_err(unwrap_io_error)
+                    .context(JsonSerialization { path: file })
             })
         });
 
@@ -253,7 +262,8 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
                     .open(&outfile)
                     .context(OpenOutput { path: outfile })?;
                 let mut writer = BufWriter::new(fout);
-                serialize(opt, &mut writer, &replay).context(JsonSerialization { path: file })
+                serialize(opt.pretty, &mut writer, &replay)
+                    .context(JsonSerialization { path: file })
             })
         })
         .collect::<Result<(), RocketError>>()?;
@@ -261,12 +271,23 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
     }
 }
 
-fn serialize<W: Write>(opt: &Opt, writer: W, replay: &Replay) -> Result<(), serde_json::Error> {
-    if opt.pretty {
+fn unwrap_io_error(e: serde_json::Error) -> SerdeError {
+    if e.is_io() {
+        let ioe: std::io::Error = e.into();
+        SerdeError::IoError { source: ioe }
+    } else {
+        SerdeError::OtherError { source: e }
+    }
+}
+
+fn serialize<W: Write>(pretty: bool, writer: W, replay: &Replay) -> Result<(), SerdeError> {
+    let res = if pretty {
         serde_json::to_writer_pretty(writer, &replay)
     } else {
         serde_json::to_writer(writer, replay)
-    }
+    };
+
+    res.map_err(unwrap_io_error)
 }
 
 fn run() -> Result<(), RocketError> {
@@ -289,7 +310,7 @@ fn run() -> Result<(), RocketError> {
         if !opt.dry_run {
             let stdout = io::stdout();
             let lock = stdout.lock();
-            serialize(&opt, BufWriter::new(lock), &replay)
+            serialize(opt.pretty, BufWriter::new(lock), &replay)
                 .context(JsonSerialization { path: "stdout" })?;
         }
         Ok(())
@@ -297,7 +318,20 @@ fn run() -> Result<(), RocketError> {
 }
 
 fn main() {
-    if let Err(ref e) = run() {
+    if let Err(e) = run() {
+        // Try and detect a broken pipe (piping stdout to head -c 50),
+        // and if so exit gracefully
+        let mut root = e.source();
+        while let Some(source) = root {
+            if let Some(io_error) = source.downcast_ref::<std::io::Error>() {
+                if io_error.kind() == std::io::ErrorKind::BrokenPipe {
+                    ::std::process::exit(0);
+                }
+            }
+
+            root = source.source();
+        }
+
         eprintln!("An error occurred: {}", e);
         if let Some(backtrace) = ErrorCompat::backtrace(&e) {
             eprintln!("{}", backtrace);
