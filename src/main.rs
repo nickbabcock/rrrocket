@@ -55,6 +55,9 @@ enum RocketError {
 
     #[snafu(display("Could not read stdin: {}", source))]
     ReadStdin { source: io::Error },
+
+    #[snafu(display("Could not write to stdout: {}", source))]
+    WriteStdout { source: io::Error },
 }
 
 #[derive(StructOpt, Debug, Clone, PartialEq)]
@@ -235,22 +238,24 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
             let mut writer = BufWriter::new(lock);
             for line in recv.into_iter() {
                 if let Ok(json) = line {
-                    let _ = writeln!(writer, "{}", json);
-                    let _ = writer.flush();
+                    writeln!(writer, "{}", json)?;
+                    writer.flush()?;
                 }
             }
+
+            Ok(())
         });
 
-        let send = json_lines.try_for_each_with(send, |s, x| s.send(x));
-        if let Err(e) = send {
-            eprintln!("Unable to send internal data: {:?}", e);
+        // Ignore the send error as the receiver can hang up when it is no longer supposed to be
+        // writing to stdout (eg: broken pipe).
+        let _ = json_lines.try_for_each_with(send, |s, x| s.send(x));
+        match thrd.join() {
+            Err(e) => {
+                eprintln!("Unable to join internal thread: {:?}", e);
+                Ok(())
+            }
+            Ok(x) => x.context(WriteStdout),
         }
-
-        if let Err(e) = thrd.join() {
-            eprintln!("Unable to join internal thread: {:?}", e);
-        }
-
-        Ok(())
     } else {
         res.map(|parse_result| {
             parse_result.and_then(|(file, replay)| {
