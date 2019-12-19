@@ -1,3 +1,8 @@
+## v0.6.2 - December 19th 2019
+
+* Update replay parser to be more resiliant against crafted inputs
+* Exit gracefully when output is piped to `head` (broken pipes)
+
 ## v0.6.1 - November 19th 2019
 
 * Update replay parser to latest version:
