@@ -1,3 +1,10 @@
+## v0.7.0 - February 24th 2020
+
+* Update replay parser to latest version. The biggest change will cause the
+  output of RigidBody rotations to be different (ie accurate). Check [boxcar's release
+  notes](https://github.com/nickbabcock/boxcars/blob/master/CHANGELOG.md#v070---february-21st-2020)
+  for more information.
+
 ## v0.6.2 - December 19th 2019
 
 * Update replay parser to be more resiliant against crafted inputs
