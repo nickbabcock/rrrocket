@@ -1,3 +1,7 @@
+## v0.7.1 - March 7th 2020
+
+* Update replay parser to latest version for about a 20% bump in performance
+
 ## v0.7.0 - February 24th 2020
 
 * Update replay parser to latest version. The biggest change will cause the
