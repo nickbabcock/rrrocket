@@ -1,3 +1,7 @@
+## v0.7.2 - March 13th 2020
+
+* Update replay parser to latest version to be able to parse replays from the latest 1.74 patch
+
 ## v0.7.1 - March 7th 2020
 
 * Update replay parser to latest version for about a 20% bump in performance
