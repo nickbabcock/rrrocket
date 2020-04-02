@@ -1,3 +1,7 @@
+## v0.8.0 - April 2nd 2020
+
+* Update replay parser to latest version, which switches some network attribute fields from unsigned to signed and names the fields more appropriately.
+
 ## v0.7.2 - March 13th 2020
 
 * Update replay parser to latest version to be able to parse replays from the latest 1.74 patch
