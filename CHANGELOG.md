@@ -1,3 +1,7 @@
+## v0.8.1 - April 20th 2020
+
+* Support latest rocket league patch (1.76) for heatseeker matches.
+
 ## v0.8.0 - April 2nd 2020
 
 * Update replay parser to latest version, which switches some network attribute fields from unsigned to signed and names the fields more appropriately.
