@@ -492,7 +492,7 @@ dependencies = [
 
 [[package]]
 name = "rrrocket"
-version = "0.8.2"
+version = "0.8.3-pre"
 dependencies = [
  "assert_cmd 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "boxcars 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
