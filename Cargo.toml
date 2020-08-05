@@ -24,3 +24,7 @@ assert_cmd = "1.0"
 predicates = "1"
 fs_extra = "1"
 tempfile = "3"
+
+[profile.release]
+lto = true
+codegen-units = 1

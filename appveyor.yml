@@ -38,7 +38,7 @@ test_script:
 build: false
 
 before_deploy:
-  - cargo rustc -p rrrocket --target %TARGET% --release --bin rrrocket -- -C lto
+  - cargo build --target %TARGET% --release
   - ps: ci\before_deploy.ps1
 
 deploy:

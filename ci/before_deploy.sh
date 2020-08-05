@@ -17,7 +17,7 @@ main() {
 
     test -f Cargo.lock || cargo generate-lockfile
 
-    cross rustc -p rrrocket --target $TARGET --bin rrrocket --release -- -C lto
+    cross build --target $TARGET --release
     cp target/$TARGET/release/rrrocket $stage/
 
     cd $stage
