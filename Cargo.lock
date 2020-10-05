@@ -55,7 +55,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "boxcars"
-version = "0.8.3"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitter 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -480,7 +480,7 @@ name = "rrrocket"
 version = "0.8.4-pre"
 dependencies = [
  "assert_cmd 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "boxcars 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "boxcars 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "either 1.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "fs_extra 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "glob 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -692,7 +692,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum autocfg 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f8aac770f1885fd7e387acedd76065302551364496e46b3dd00860b2f8359b9d"
 "checksum bitflags 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 "checksum bitter 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "f5eda7961e9ec30693e08246d7d34aced60a5b885dc077cc39bae04580914fb3"
-"checksum boxcars 0.8.3 (registry+https://github.com/rust-lang/crates.io-index)" = "f14f8cbd490de92ae9f83a31079e5fc3169590ff2bad77a17d84be4034f3fd94"
+"checksum boxcars 0.8.5 (registry+https://github.com/rust-lang/crates.io-index)" = "3d53eb2078089da37117023205d292bc0880e4412ae4faa896be54bea3996e1e"
 "checksum cfg-if 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)" = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 "checksum clap 2.33.1 (registry+https://github.com/rust-lang/crates.io-index)" = "bdfa80d47f954d53a35a64987ca1422f495b8d6483c0fe9f7117b36c2a792129"
 "checksum crossbeam-channel 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "09ee0cc8804d5393478d743b035099520087a5186f3b93fa58cec08fa62407b6"
