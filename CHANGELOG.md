@@ -1,3 +1,7 @@
+## v0.8.5 - December 9th 2020
+
+* Support rumble pickup attributes from latest replays
+
 ## v0.8.4 - October 5th 2020
 
 * Support additional attributes from latest replays
