@@ -71,16 +71,16 @@ jobs:
       run: |
         VERSION="${GITHUB_REF#refs/tags/}"
         echo "version is $VERSION"
-        STAGING="rakaly-${VERSION:1}-${{ matrix.target }}"
+        STAGING="rrrocket-${VERSION:1}-${{ matrix.target }}"
         echo "STAGING DIR: $STAGING"
         mkdir $STAGING 
         if [[ "${{ matrix.os }}" = windows* ]]; then
-          cp "target/${{ matrix.target }}/release/rakaly.exe" "$STAGING/"
+          cp "target/${{ matrix.target }}/release/rrrocket.exe" "$STAGING/"
           7z a "$STAGING.zip" "$STAGING"
           echo "ASSET=$STAGING.zip" >> $GITHUB_ENV
         else
-          strip "target/${{ matrix.target }}/release/rakaly"
-          cp "target/${{ matrix.target }}/release/rakaly" "$STAGING/"
+          strip "target/${{ matrix.target }}/release/rrrocket"
+          cp "target/${{ matrix.target }}/release/rrrocket" "$STAGING/"
           tar czf "$STAGING.tar.gz" "$STAGING"
           echo "ASSET=$STAGING.tar.gz" >> $GITHUB_ENV
         fi
