@@ -1,6 +1,6 @@
 # rrrocket
 
-[![Build Status](https://travis-ci.org/nickbabcock/rrrocket.svg?branch=master)](https://travis-ci.org/nickbabcock/rrrocket) [![Build status](https://ci.appveyor.com/api/projects/status/939bi13urfp8w1n6?svg=true)](https://ci.appveyor.com/project/nickbabcock/rrrocket)
+![ci](https://github.com/nickbabcock/rrrocket/workflows/ci/badge.svg)
 
 rrrocket parses a Rocket League replay file and outputs JSON.
 
