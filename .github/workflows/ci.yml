@@ -1,0 +1,42 @@
+name: ci
+on:
+  push:
+  schedule:
+  - cron: '00 01 * * *'
+
+jobs:
+  test:
+    name: test
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO: cargo
+      TARGET:
+    strategy:
+      fail-fast: false
+      matrix:
+        build:
+        - linux-musl
+        - macos
+        - win-msvc
+        include:
+        - build: linux-musl
+          os: ubuntu-latest
+          target: x86_64-unknown-linux-musl
+        - build: macos
+          os: macos-latest
+          target: x86_64-apple-darwin
+        - build: win-msvc
+          os: windows-latest
+          target: x86_64-pc-windows-msvc
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install Cross
+      if: matrix.build != 'macos' && matrix.build != 'win-msvc'
+      run: |
+        cargo install cross
+        echo "CARGO=cross" >> $GITHUB_ENV
+        echo "TARGET=--target ${{ matrix.target }}" >> $GITHUB_ENV
+    - name: Build
+      run: ${{ env.CARGO }} build --verbose $TARGET
+    - name: Test
+      run: ${{ env.CARGO }} test --verbose $TARGET
