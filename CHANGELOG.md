@@ -1,3 +1,7 @@
+## v0.8.8 - January 8th 2021
+
+* Support for replays that should contain a trailer but lack one
+
 ## v0.8.7 - December 25th 2020
 
 * Support for additional RLCS / LAN replays
