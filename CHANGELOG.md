@@ -1,3 +1,7 @@
+## v0.8.9 - February 7th 2021
+
+* Support for gridiron replays
+
 ## v0.8.8 - January 8th 2021
 
 * Support for replays that should contain a trailer but lack one
