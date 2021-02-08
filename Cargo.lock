@@ -622,7 +622,7 @@ dependencies = [
 
 [[package]]
 name = "rrrocket"
-version = "0.8.9-pre"
+version = "0.8.9"
 dependencies = [
  "assert_cmd",
  "boxcars",
