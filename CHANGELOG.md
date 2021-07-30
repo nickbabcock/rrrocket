@@ -1,3 +1,25 @@
+## v0.9.0 - July 30th 2021
+
+The byte header property has been updated from looking like:
+
+```json
+{
+  "Platform": 0
+}
+
+```
+
+to
+
+```json
+{
+  "Platform": {
+    "kind": "OnlinePlatform",
+    "value": "OnlinePlatform_Steam"
+  }
+}
+```
+
 ## v0.8.9 - February 7th 2021
 
 * Support for gridiron replays
