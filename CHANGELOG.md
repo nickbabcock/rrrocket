@@ -1,3 +1,7 @@
+## v0.9.1 - August 14th 2021
+
+- Support for rocket league v2.01 replays
+
 ## v0.9.0 - July 30th 2021
 
 The byte header property has been updated from looking like:
