@@ -1,64 +1,14 @@
+use anyhow::{bail, Context};
 use boxcars::{CrcCheck, NetworkParse, ParseError, ParserBuilder, Replay};
 use glob::glob;
 use rayon::iter::ParallelBridge;
 use rayon::prelude::*;
 use serde::Serialize;
-use snafu::{ErrorCompat, ResultExt, Snafu};
-use std::error::Error;
 use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufWriter};
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
-
-#[derive(Debug, Snafu)]
-enum SerdeError {
-    #[snafu(display("serialization failed from an io error: {}", source))]
-    IoError { source: io::Error },
-
-    #[snafu(display("serialization failed: {}", source))]
-    OtherError { source: serde_json::Error },
-}
-
-#[derive(Debug, Snafu)]
-enum RocketError {
-    #[snafu(display("Unable to read replay from {}: {}", path.display(), source))]
-    ReadReplay { source: io::Error, path: PathBuf },
-
-    #[snafu(display("Unable to read directory for replays {}: {}", path.display(), source))]
-    ReadDir { source: io::Error, path: PathBuf },
-
-    #[snafu(display("Unable to parse replay {}: {}", path.display(), source))]
-    ParseReplay {
-        #[snafu(source(from(ParseError, Box::new)))]
-        source: Box<ParseError>,
-        path: PathBuf,
-    },
-
-    #[snafu(display("Unable to form glob from {}: {}", path.display(), source))]
-    InvalidGlob {
-        source: glob::PatternError,
-        path: PathBuf,
-    },
-
-    #[snafu(display("Unable to form glob from {}: {}", source.path().display(), source))]
-    InvalidGlobRead { source: glob::GlobError },
-
-    #[snafu(display("Could not open json output file {}: {}", path.display(), source))]
-    OpenOutput { source: io::Error, path: PathBuf },
-
-    #[snafu(display("Could not serialize replay {}: {}", path.display(), source))]
-    JsonSerialization { source: SerdeError, path: PathBuf },
-
-    #[snafu(display("Expected one input file --multiple is not specified"))]
-    InputArguments,
-
-    #[snafu(display("Could not read stdin: {}", source))]
-    ReadStdin { source: io::Error },
-
-    #[snafu(display("Could not write to stdout: {}", source))]
-    WriteStdout { source: io::Error },
-}
 
 #[derive(StructOpt, Debug, Clone, PartialEq)]
 #[structopt(
@@ -114,20 +64,20 @@ struct RocketReplay<'a> {
     replay: Replay,
 }
 
-fn read_file(opt: &Opt, file_path: PathBuf) -> Result<(PathBuf, Replay), RocketError> {
+fn read_file(opt: &Opt, file_path: PathBuf) -> anyhow::Result<(PathBuf, Replay)> {
     // Try to mmap the file first so we don't have to worry about potentially allocating a large
     // buffer in case there is like a 10GB iso file that ends in .replay
-    let f = fs::File::open(&file_path).context(ReadReplay { path: &file_path })?;
+    let f = fs::File::open(&file_path)?;
     let mmap = unsafe { memmap::MmapOptions::new().map(&f) };
     match mmap {
         Ok(data) => {
-            let replay = parse_replay(opt, &data).context(ParseReplay { path: &file_path })?;
+            let replay = parse_replay(opt, &data)?;
             Ok((file_path, replay))
         }
         Err(_) => {
             // If the mmap fails, just try reading the file
-            let data = fs::read(&file_path).context(ReadReplay { path: &file_path })?;
-            let replay = parse_replay(opt, &data).context(ParseReplay { path: &file_path })?;
+            let data = fs::read(&file_path)?;
+            let replay = parse_replay(opt, &data)?;
             Ok((file_path, replay))
         }
     }
@@ -148,12 +98,10 @@ fn parse_replay(opt: &Opt, data: &[u8]) -> Result<Replay, ParseError> {
         .parse()
 }
 
-fn expand_directory(dir: &Path) -> impl Iterator<Item = Result<PathBuf, RocketError>> {
+fn expand_directory(dir: &Path) -> impl Iterator<Item = anyhow::Result<PathBuf>> {
     let dir_glob_fmt = format!("{}/**/*.replay", dir.display());
-    let replays = glob(&dir_glob_fmt).map_err(|e| RocketError::InvalidGlob {
-        source: e,
-        path: dir.to_path_buf(),
-    });
+    let replays =
+        glob(&dir_glob_fmt).with_context(|| format!("unable to form glob in {}", dir.display()));
 
     match replays {
         Err(e) => either::Either::Left(std::iter::once(Err(e))),
@@ -172,8 +120,7 @@ fn expand_directory(dir: &Path) -> impl Iterator<Item = Result<PathBuf, RocketEr
                             None
                         }
                     } else {
-                        let err = x.map_err(|e| RocketError::InvalidGlobRead { source: e });
-                        Some(err)
+                        Some(x.context("glob error"))
                     }
                 });
             either::Either::Right(res)
@@ -183,9 +130,7 @@ fn expand_directory(dir: &Path) -> impl Iterator<Item = Result<PathBuf, RocketEr
 
 /// Each file argument that we get could be a directory so we need to expand that directory and
 /// find all the *.replay files. File arguments turn into single element vectors.
-fn expand_paths<'a>(
-    files: &'a [PathBuf],
-) -> impl Iterator<Item = Result<PathBuf, RocketError>> + 'a {
+fn expand_paths<'a>(files: &'a [PathBuf]) -> impl Iterator<Item = anyhow::Result<PathBuf>> + 'a {
     files
         .iter()
         .map(|arg_file| {
@@ -199,7 +144,7 @@ fn expand_paths<'a>(
         .flatten()
 }
 
-fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
+fn parse_multiple_replays(opt: &Opt) -> anyhow::Result<()> {
     let res = expand_paths(&opt.input)
         .inspect(|file| {
             if let Err(ref e) = file {
@@ -208,7 +153,10 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
         })
         .flat_map(Result::ok)
         .par_bridge()
-        .map(|file_path| read_file(opt, file_path));
+        .map(|file_path| {
+            read_file(opt, file_path.clone())
+                .with_context(|| format!("Unable to parse replay {}", file_path.display()))
+        });
 
     if opt.dry_run {
         let (send, recv) = std::sync::mpsc::sync_channel(rayon::current_num_threads());
@@ -217,14 +165,14 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
             let lock = stdout.lock();
             let mut writer = BufWriter::new(lock);
             for parsed_replay in recv.into_iter() {
-                let res: Result<(PathBuf, Replay), RocketError> = parsed_replay;
+                let res: anyhow::Result<(PathBuf, Replay)> = parsed_replay;
                 match res {
                     Ok((file, _replay)) => writeln!(&mut writer, "Parsed: {}", file.display())?,
-                    Err(e) => eprintln!("Failed {}", e),
+                    Err(e) => eprintln!("Failed {:?}", e),
                 }
             }
 
-            Ok(())
+            Ok(()) as anyhow::Result<()>
         });
 
         // Ignore the send error as the receiver can hang up when it is no longer supposed to be
@@ -235,7 +183,7 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
                 eprintln!("Unable to join internal thread: {:?}", e);
                 Ok(())
             }
-            Ok(x) => x.context(WriteStdout),
+            Ok(x) => x.context("Could not write to stdout"),
         }
     } else if opt.json_lines {
         let json_lines = res.map(|parse_result| {
@@ -245,8 +193,7 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
                     replay,
                 };
                 serde_json::to_string(&rep)
-                    .map_err(unwrap_io_error)
-                    .context(JsonSerialization { path: file })
+                    .with_context(|| format!("Could not serialize replay {}", file.display()))
             })
         });
 
@@ -262,7 +209,7 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
                 }
             }
 
-            Ok(())
+            Ok(()) as anyhow::Result<()>
         });
 
         // Ignore the send error as the receiver can hang up when it is no longer supposed to be
@@ -273,7 +220,7 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
                 eprintln!("Unable to join internal thread: {:?}", e);
                 Ok(())
             }
-            Ok(x) => x.context(WriteStdout),
+            Ok(x) => x.context("Could not write to stdout"),
         }
     } else {
         res.map(|parse_result| {
@@ -284,58 +231,51 @@ fn parse_multiple_replays(opt: &Opt) -> Result<(), RocketError> {
                     .create(true)
                     .truncate(true)
                     .open(&outfile)
-                    .context(OpenOutput { path: outfile })?;
+                    .with_context(|| format!("could not open json output file {}", outfile))?;
                 let mut writer = BufWriter::new(fout);
                 serialize(opt.pretty, &mut writer, &replay)
-                    .context(JsonSerialization { path: file })
+                    .with_context(|| format!("Could not serialize replay {}", file.display()))
             })
         })
-        .collect::<Result<(), RocketError>>()?;
+        .collect::<anyhow::Result<()>>()?;
         Ok(())
     }
 }
 
-fn unwrap_io_error(e: serde_json::Error) -> SerdeError {
-    if e.is_io() {
-        let ioe: std::io::Error = e.into();
-        SerdeError::IoError { source: ioe }
-    } else {
-        SerdeError::OtherError { source: e }
-    }
-}
-
-fn serialize<W: Write>(pretty: bool, writer: W, replay: &Replay) -> Result<(), SerdeError> {
+fn serialize<W: Write>(pretty: bool, writer: W, replay: &Replay) -> anyhow::Result<()> {
     let res = if pretty {
         serde_json::to_writer_pretty(writer, &replay)
     } else {
         serde_json::to_writer(writer, replay)
     };
 
-    res.map_err(unwrap_io_error)
+    res.map_err(|e| e.into())
 }
 
-fn run() -> Result<(), RocketError> {
+fn run() -> anyhow::Result<()> {
     let opt = Opt::from_args();
     if opt.multiple {
         parse_multiple_replays(&opt)
     } else if opt.input.len() > 1 {
-        Err(RocketError::InputArguments)
+        bail!("Expected one input file when --multiple is not specified");
     } else {
         let replay = if opt.input.is_empty() {
             let mut d = Vec::new();
-            io::stdin().read_to_end(&mut d).context(ReadStdin)?;
-            parse_replay(&opt, &d).context(ParseReplay { path: "stdin" })
+            io::stdin()
+                .read_to_end(&mut d)
+                .context("Could not read stdin")?;
+            parse_replay(&opt, &d).context("Could not parse replay from stdin")
         } else {
             let file = &opt.input[0];
-            let (_, replay) = read_file(&opt, file.clone())?;
+            let (_, replay) = read_file(&opt, file.clone())
+                .with_context(|| format!("Unable to parse replay {}", file.display()))?;
             Ok(replay)
         }?;
 
         if !opt.dry_run {
             let stdout = io::stdout();
             let lock = stdout.lock();
-            serialize(opt.pretty, BufWriter::new(lock), &replay)
-                .context(JsonSerialization { path: "stdout" })?;
+            serialize(opt.pretty, BufWriter::new(lock), &replay)?;
         }
         Ok(())
     }
@@ -356,11 +296,7 @@ fn main() {
             root = source.source();
         }
 
-        eprintln!("An error occurred: {}", e);
-        if let Some(backtrace) = ErrorCompat::backtrace(&e) {
-            eprintln!("{}", backtrace);
-        }
-
+        eprintln!("An error occurred: {:?}", e);
         ::std::process::exit(1);
     }
 }
@@ -385,7 +321,7 @@ mod tests {
             .failure()
             .code(1)
             .stderr(predicate::str::contains(
-                "Unable to read replay from non-exist/assets/fuzz-string-too-long.replay",
+                "Unable to parse replay non-exist/assets/fuzz-string-too-long.replay",
             ));
     }
 
