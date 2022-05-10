@@ -84,7 +84,7 @@ fn read_file(opt: &Opt, file_path: PathBuf) -> anyhow::Result<(PathBuf, Replay)>
 }
 
 fn parse_replay(opt: &Opt, data: &[u8]) -> Result<Replay, ParseError> {
-    ParserBuilder::new(&data[..])
+    ParserBuilder::new(data)
         .with_crc_check(if opt.crc {
             CrcCheck::Always
         } else {
@@ -130,18 +130,17 @@ fn expand_directory(dir: &Path) -> impl Iterator<Item = anyhow::Result<PathBuf>>
 
 /// Each file argument that we get could be a directory so we need to expand that directory and
 /// find all the *.replay files. File arguments turn into single element vectors.
-fn expand_paths<'a>(files: &'a [PathBuf]) -> impl Iterator<Item = anyhow::Result<PathBuf>> + 'a {
+fn expand_paths(files: &[PathBuf]) -> impl Iterator<Item = anyhow::Result<PathBuf>> + '_ {
     files
         .iter()
-        .map(|arg_file| {
+        .flat_map(|arg_file| {
             let p = Path::new(arg_file);
             if p.is_file() {
                 either::Either::Left(std::iter::once(Ok(p.to_path_buf())))
             } else {
-                either::Either::Right(expand_directory(&p))
+                either::Either::Right(expand_directory(p))
             }
         })
-        .flatten()
 }
 
 fn parse_multiple_replays(opt: &Opt) -> anyhow::Result<()> {
@@ -202,11 +201,9 @@ fn parse_multiple_replays(opt: &Opt) -> anyhow::Result<()> {
             let stdout = io::stdout();
             let lock = stdout.lock();
             let mut writer = BufWriter::new(lock);
-            for line in recv.into_iter() {
-                if let Ok(json) = line {
-                    writeln!(writer, "{}", json)?;
-                    writer.flush()?;
-                }
+            for json in recv.into_iter().flatten() {
+                writeln!(writer, "{}", json)?;
+                writer.flush()?;
             }
 
             Ok(()) as anyhow::Result<()>
