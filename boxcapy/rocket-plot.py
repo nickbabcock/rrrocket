@@ -46,13 +46,20 @@ def run_analysis(headless, files):
 
     for game in data:
         props = game["properties"]
-        name = props["PlayerName"]
+
+        name = props.get("PlayerName")
+        if name is None:
+            continue
+
         fps = props["RecordFPS"]
-        player = find_player_team(props["PlayerStats"], name)
+        player = find_player_team(props.get("PlayerStats", []), name)
+        if player is None:
+            continue
+
         team = player.get("Team")
         team0_score = props.get("Team0Score", 0)
         team1_score = props.get("Team1Score", 0)
-        frames = [x["frame"] / fps for x in props["Goals"]]
+        frames = [x["frame"] / fps for x in props.get("Goals", [])]
         time_diff = np.append(time_diff, np.diff([0] + frames))
         if team == 0 and team0_score > team1_score:
             wins = wins + 1
@@ -97,15 +104,14 @@ def find_player_team(player_stats, name):
     for stat in player_stats:
         if stat["Name"] == name:
             return stat
-    raise Exception("Did not see player name")
 
 
 def autolabel(rects, ax):
     for rect in rects:
         h = rect.get_height()
         ax.text(
-            rect.get_x() + rect.get_width() / 2.,
-            1.05 * h + .1,
+            rect.get_x() + rect.get_width() / 2.0,
+            1.05 * h + 0.1,
             "%d" % int(h),
             ha="center",
             va="bottom",
