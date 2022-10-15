@@ -1,3 +1,7 @@
+# v0.9.5 - October 15th, 2022
+
+- Support for parsing patch v2.21 replay attributes
+
 # v0.9.4 - May 10th, 2022
 
 - Support parsing voice chat related attributes (patch v2.15)
