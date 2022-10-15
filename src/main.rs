@@ -1,5 +1,6 @@
 use anyhow::{bail, Context};
 use boxcars::{CrcCheck, NetworkParse, ParseError, ParserBuilder, Replay};
+use clap::Parser;
 use glob::glob;
 use rayon::iter::ParallelBridge;
 use rayon::prelude::*;
@@ -8,7 +9,6 @@ use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufWriter};
 use std::path::{Path, PathBuf};
-use clap::Parser;
 
 /// Parses Rocket League replay files and outputs JSON with decoded information
 #[derive(Parser, Debug, Clone, PartialEq)]
@@ -128,16 +128,14 @@ fn expand_directory(dir: &Path) -> impl Iterator<Item = anyhow::Result<PathBuf>>
 /// Each file argument that we get could be a directory so we need to expand that directory and
 /// find all the *.replay files. File arguments turn into single element vectors.
 fn expand_paths(files: &[PathBuf]) -> impl Iterator<Item = anyhow::Result<PathBuf>> + '_ {
-    files
-        .iter()
-        .flat_map(|arg_file| {
-            let p = Path::new(arg_file);
-            if p.is_file() {
-                either::Either::Left(std::iter::once(Ok(p.to_path_buf())))
-            } else {
-                either::Either::Right(expand_directory(p))
-            }
-        })
+    files.iter().flat_map(|arg_file| {
+        let p = Path::new(arg_file);
+        if p.is_file() {
+            either::Either::Left(std::iter::once(Ok(p.to_path_buf())))
+        } else {
+            either::Either::Right(expand_directory(p))
+        }
+    })
 }
 
 fn parse_multiple_replays(opt: &Opt) -> anyhow::Result<()> {
