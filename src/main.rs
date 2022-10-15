@@ -8,53 +8,50 @@ use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufWriter};
 use std::path::{Path, PathBuf};
-use structopt::StructOpt;
+use clap::Parser;
 
-#[derive(StructOpt, Debug, Clone, PartialEq)]
-#[structopt(
-    name = "rrrocket",
-    about = "Parses Rocket League replay files and outputs JSON with decoded information"
-)]
+/// Parses Rocket League replay files and outputs JSON with decoded information
+#[derive(Parser, Debug, Clone, PartialEq)]
 struct Opt {
-    #[structopt(
-        short = "c",
+    #[arg(
+        short = 'c',
         long = "crc-check",
         help = "forces a crc check for corruption even when replay was successfully parsed"
     )]
     crc: bool,
 
-    #[structopt(
-        short = "n",
+    #[arg(
+        short = 'n',
         long = "network-parse",
         help = "parses the network data of a replay instead of skipping it"
     )]
     body: bool,
 
-    #[structopt(
-        short = "m",
+    #[arg(
+        short = 'm',
         long = "multiple",
         help = "parse multiple replays in provided directories. Defaults to writing to a sibling JSON file, but can output to stdout with --json-lines"
     )]
     multiple: bool,
 
-    #[structopt(
-        short = "p",
+    #[arg(
+        short = 'p',
         long = "pretty",
         help = "output replay as pretty-printed JSON"
     )]
     pretty: bool,
 
-    #[structopt(
-        short = "j",
+    #[arg(
+        short = 'j',
         long = "json-lines",
         help = "output multiple files to stdout via json lines"
     )]
     json_lines: bool,
 
-    #[structopt(long = "dry-run", help = "parses but does not write JSON output")]
+    #[arg(long = "dry-run", help = "parses but does not write JSON output")]
     dry_run: bool,
 
-    #[structopt(help = "Rocket League replay files")]
+    #[arg(help = "Rocket League replay files")]
     input: Vec<PathBuf>,
 }
 
@@ -250,7 +247,7 @@ fn serialize<W: Write>(pretty: bool, writer: W, replay: &Replay) -> anyhow::Resu
 }
 
 fn run() -> anyhow::Result<()> {
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
     if opt.multiple {
         parse_multiple_replays(&opt)
     } else if opt.input.len() > 1 {
