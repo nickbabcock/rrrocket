@@ -56,9 +56,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitter"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71df88e035e57f5e424e3683aaea5310eed572ff9754b566c62b32ee568b2ce1"
+checksum = "803ffa563b84251ab8856d83d6b891e8d161e7df73806e10f78b35af05ba1a04"
 
 [[package]]
 name = "boxcars"
