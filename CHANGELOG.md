@@ -30,7 +30,6 @@ The byte header property has been updated from looking like:
 {
   "Platform": 0
 }
-
 ```
 
 to
