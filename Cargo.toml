@@ -21,7 +21,7 @@ memmap = "0.7"
 
 [dev-dependencies]
 assert_cmd = "2"
-predicates = "2"
+predicates = "3"
 fs_extra = "1"
 tempfile = "3"
 
