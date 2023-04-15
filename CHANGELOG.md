@@ -1,3 +1,7 @@
+# v0.9.8 - April 15th, 2023
+
+- Support knockout replays
+
 # v0.9.7 - December 3rd, 2022
 
 - Support parsing patch v2.23 replays
