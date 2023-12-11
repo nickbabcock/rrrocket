@@ -1,5 +1,6 @@
 name: ci
 on:
+  pull_request:
   push:
   schedule:
   - cron: '00 01 * * *'
@@ -35,8 +36,85 @@ jobs:
       run: |
         cargo install cross
         echo "CARGO=cross" >> $GITHUB_ENV
-        echo "TARGET=--target ${{ matrix.target }}" >> $GITHUB_ENV
+
     - name: Build
-      run: ${{ env.CARGO }} build --verbose $TARGET
-    - name: Test
-      run: ${{ env.CARGO }} test --verbose $TARGET
+      run: ${{ env.CARGO }} build --verbose --target "${{ matrix.target }}"
+
+    - name: Tests
+      run: ${{ env.CARGO }} test --verbose --target "${{ matrix.target }}"
+
+    - name: Build Release
+      run: ${{ env.CARGO }} build --release --verbose --target "${{ matrix.target }}"
+
+    - name: Stage Release
+      shell: bash
+      run: |
+        if [[ "${GITHUB_REF}" = *refs/tags/* ]]; then
+          VERSION="${GITHUB_REF#refs/tags/}"
+        else
+          VERSION="vnightly"
+        fi
+        echo "version is $VERSION"
+        STAGING="rrrocket-${VERSION:1}-${{ matrix.target }}"
+        echo "STAGING DIR: $STAGING"
+        mkdir $STAGING
+        if [[ "${{ matrix.os }}" = windows* ]]; then
+          cp "target/${{ matrix.target }}/release/rrrocket.exe" "$STAGING/"
+        else
+          strip "target/${{ matrix.target }}/release/rrrocket"
+          cp "target/${{ matrix.target }}/release/rrrocket" "$STAGING/"
+        fi
+        echo "ASSET=$STAGING" >> $GITHUB_ENV
+    - uses: actions/upload-artifact@v3
+      with:
+        path: ${{ env.ASSET }}
+        name: ${{ env.ASSET }}
+        if-no-files-found: error
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v3
+      with:
+        path: artifacts-temp
+    - name: Flatten artifacts
+      run: |
+        mkdir artifacts
+        cd artifacts-temp
+        for i in *; do
+          if [[ "$i" = *windows* ]]; then
+            7z a "../artifacts/$(basename "$i").zip" "$i"
+          else
+            tar czf "../artifacts/$(basename "$i").tar.gz" "$i"
+          fi
+        done
+        ls -lR ../artifacts
+    - name: Create Release
+      if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{secrets.GITHUB_TOKEN}}
+        script: |
+          console.log('environment', process.versions);
+          const fs = require('fs').promises;
+          const { repo: { owner, repo }, sha } = context;
+          console.log({ owner, repo, sha });
+          const tag_name = process.env.GITHUB_REF.split("/")[2];
+          const release = await github.rest.repos.createRelease({
+            owner, repo,
+            tag_name,
+            draft: false,
+            target_commitish: sha
+          });
+          console.log('created release', { release });
+          for (let file of await fs.readdir('artifacts')) {
+            console.log('uploading', file);
+            await github.rest.repos.uploadReleaseAsset({
+              owner, repo,
+              release_id: release.data.id,
+              name: file,
+              data: await fs.readFile(`artifacts/${file}`)
+            });
+          }
