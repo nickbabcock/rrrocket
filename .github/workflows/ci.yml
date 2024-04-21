@@ -2,6 +2,8 @@ name: ci
 on:
   pull_request:
   push:
+    branches: ['master']
+    tags: ['v*']
   schedule:
   - cron: '00 01 * * *'
 
@@ -16,35 +18,35 @@ jobs:
       fail-fast: false
       matrix:
         build:
-        - linux-musl
-        - macos
-        - win-msvc
+        - x86_64-unknown-linux-musl
+        - x86_64-apple-darwin
+        - aarch64-apple-darwin
+        - x86_64-pc-windows-msvc
         include:
-        - build: linux-musl
+        - build: x86_64-unknown-linux-musl
           os: ubuntu-latest
-          target: x86_64-unknown-linux-musl
-        - build: macos
-          os: macos-latest
-          target: x86_64-apple-darwin
-        - build: win-msvc
+        - build: x86_64-apple-darwin
+          os: macos-12
+        - build: aarch64-apple-darwin
+          os: macos-14
+        - build: x86_64-pc-windows-msvc
           os: windows-latest
-          target: x86_64-pc-windows-msvc
     steps:
     - uses: actions/checkout@v4
     - name: Install Cross
-      if: matrix.build != 'macos' && matrix.build != 'win-msvc'
+      if: matrix.os == 'ubuntu-latest'
       run: |
         cargo install cross
         echo "CARGO=cross" >> $GITHUB_ENV
 
     - name: Build
-      run: ${{ env.CARGO }} build --verbose --target "${{ matrix.target }}"
+      run: ${{ env.CARGO }} build --verbose --target "${{ matrix.build }}"
 
     - name: Tests
-      run: ${{ env.CARGO }} test --verbose --target "${{ matrix.target }}"
+      run: ${{ env.CARGO }} test --verbose --target "${{ matrix.build }}"
 
     - name: Build Release
-      run: ${{ env.CARGO }} build --release --verbose --target "${{ matrix.target }}"
+      run: ${{ env.CARGO }} build --release --verbose --target "${{ matrix.build }}"
 
     - name: Stage Release
       shell: bash
@@ -55,14 +57,13 @@ jobs:
           VERSION="vnightly"
         fi
         echo "version is $VERSION"
-        STAGING="rrrocket-${VERSION:1}-${{ matrix.target }}"
+        STAGING="rrrocket-${VERSION:1}-${{ matrix.build }}"
         echo "STAGING DIR: $STAGING"
         mkdir $STAGING
         if [[ "${{ matrix.os }}" = windows* ]]; then
-          cp "target/${{ matrix.target }}/release/rrrocket.exe" "$STAGING/"
+          cp "target/${{ matrix.build }}/release/rrrocket.exe" "$STAGING/"
         else
-          strip "target/${{ matrix.target }}/release/rrrocket"
-          cp "target/${{ matrix.target }}/release/rrrocket" "$STAGING/"
+          cp "target/${{ matrix.build }}/release/rrrocket" "$STAGING/"
         fi
         echo "ASSET=$STAGING" >> $GITHUB_ENV
     - uses: actions/upload-artifact@v4
