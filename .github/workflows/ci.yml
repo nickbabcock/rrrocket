@@ -65,7 +65,7 @@ jobs:
           cp "target/${{ matrix.target }}/release/rrrocket" "$STAGING/"
         fi
         echo "ASSET=$STAGING" >> $GITHUB_ENV
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         path: ${{ env.ASSET }}
         name: ${{ env.ASSET }}
@@ -76,7 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/download-artifact@v3
+    - uses: actions/download-artifact@v4
       with:
         path: artifacts-temp
     - name: Flatten artifacts
