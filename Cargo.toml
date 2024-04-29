@@ -18,6 +18,7 @@ boxcars = "0.9.12"
 glob = "0.3"
 either = "1"
 memmap = "0.7"
+zip = { version = "1", default-features = false, features = ["deflate-zlib-ng"] }
 
 [dev-dependencies]
 assert_cmd = "2"

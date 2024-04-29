@@ -6,9 +6,11 @@ use rayon::iter::ParallelBridge;
 use rayon::prelude::*;
 use serde::Serialize;
 use std::fs::{self, OpenOptions};
-use std::io::prelude::*;
 use std::io::{self, BufWriter};
+use std::io::{prelude::*, Cursor};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{channel, sync_channel};
+use std::thread;
 
 /// Parses Rocket League replay files and outputs JSON with decoded information
 #[derive(Parser, Debug, Clone, PartialEq)]
@@ -244,9 +246,109 @@ fn serialize<W: Write>(pretty: bool, writer: W, replay: &Replay) -> anyhow::Resu
     res.map_err(|e| e.into())
 }
 
+fn zip(file_path: &Path, opt: &Opt) -> anyhow::Result<()> {
+    let parallelism = std::thread::available_parallelism()
+        .map(|x| x.get().max(2))
+        .unwrap_or(2);
+
+    let (tx, rx) = sync_channel(parallelism - 1);
+    let (return_buf, receive_buf) = channel::<Vec<u8>>();
+
+    let f = fs::File::open(file_path)?;
+    let mmap = unsafe { memmap::MmapOptions::new().map(&f)? };
+    let zipreader = Cursor::new(&mmap);
+    let mut archive = zip::ZipArchive::new(zipreader)?;
+
+    thread::scope(|scope| {
+        scope.spawn(move || {
+            for i in 0..archive.len() {
+                let zipfile = archive
+                    .by_index(i)
+                    .with_context(|| format!("unable to retrieve zip index: {}", i));
+
+                let mut zipfile = match zipfile {
+                    Ok(zipfile) if zipfile.is_file() => zipfile,
+                    Ok(_) => continue,
+                    Err(e) => {
+                        if tx.send(Err(e)).is_err() {
+                            return;
+                        }
+                        continue;
+                    }
+                };
+
+                let name = String::from(zipfile.name());
+                let mut buf = if let Ok(mut existing_buf) = receive_buf.try_recv() {
+                    existing_buf.resize(zipfile.size() as usize, 0);
+                    existing_buf
+                } else {
+                    vec![0u8; zipfile.size() as usize]
+                };
+
+                let result = zipfile
+                    .read_exact(&mut buf)
+                    .with_context(|| format!("unable to inflate: {}", name))
+                    .map(|_| (name, buf));
+
+                // If the other end hung up stop processing.
+                if tx.send(result).is_err() {
+                    return;
+                }
+            }
+        });
+
+        let data = rx.into_iter().par_bridge().map(|args| {
+            let (name, data) = args?;
+            let result = parse_replay(opt, &data).with_context(|| format!("{}: FAILED", name));
+            let _ = return_buf.send(data);
+
+            Ok((name, result?))
+        });
+
+        if opt.dry_run {
+            data.for_each(|result: anyhow::Result<_>| match result {
+                Ok((name, _replay)) => println!("Parsed {}", name),
+                Err(e) => eprintln!("Failed {:?}", e),
+            })
+        } else {
+            data.for_each_with(
+                Vec::with_capacity(50 * 1000 * 1000),
+                |mut out, result| match result {
+                    Ok((name, replay)) => {
+                        out.clear();
+                        let rep = RocketReplay {
+                            file: &PathBuf::from(&name),
+                            replay,
+                        };
+
+                        let replay_json = serde_json::to_writer(&mut out, &rep);
+                        if let Err(e) = replay_json {
+                            eprintln!("Could not serialize replay: {} {}", name, e);
+                            return;
+                        }
+                        let mut lock = io::stdout().lock();
+                        let _ = lock.write_all(out);
+                        let _ = lock.write_all(b"\n");
+                    }
+                    Err(e) => eprintln!("Failed {:?}", e),
+                },
+            )
+        }
+    });
+
+    Ok(())
+}
+
 fn run() -> anyhow::Result<()> {
     let opt = Opt::parse();
-    if opt.multiple {
+
+    let enter_zip_mode = opt
+        .input
+        .first()
+        .is_some_and(|x| x.extension().and_then(|ext| ext.to_str()) == Some("zip"));
+    if enter_zip_mode {
+        zip(&opt.input[0], &opt)
+    } else if opt.multiple {
         parse_multiple_replays(&opt)
     } else if opt.input.len() > 1 {
         bail!("Expected one input file when --multiple is not specified");
@@ -418,5 +520,17 @@ mod tests {
                 predicate::str::contains(r#"{"header_size":1944,"header_crc":3561912561"#).count(2),
             )
             .stdout(predicate::str::contains("\n").count(2));
+    }
+
+    #[test]
+    fn test_zip() {
+        Command::cargo_bin("rrrocket")
+            .unwrap()
+            .args(&["-n", "--dry-run", "assets/replays.zip"])
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(
+                r#"Parsed replays/1ec9.replay"#,
+            ));
     }
 }
