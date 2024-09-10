@@ -1,3 +1,9 @@
+# v0.9.12 - September 9th, 2024
+
+- Support RL 2.43 replays
+- Stable JSON output
+- (Experimental) support for processing replays from a zip file
+
 # v0.9.11 - April 21st, 2024
 
 - Support RL 2.39 replays
