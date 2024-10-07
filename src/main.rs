@@ -67,7 +67,7 @@ fn read_file(opt: &Opt, file_path: PathBuf) -> anyhow::Result<(PathBuf, Replay)>
     // Try to mmap the file first so we don't have to worry about potentially allocating a large
     // buffer in case there is like a 10GB iso file that ends in .replay
     let f = fs::File::open(&file_path)?;
-    let mmap = unsafe { memmap::MmapOptions::new().map(&f) };
+    let mmap = unsafe { memmap2::MmapOptions::new().map(&f) };
     match mmap {
         Ok(data) => {
             let replay = parse_replay(opt, &data)?;
@@ -255,7 +255,7 @@ fn zip(file_path: &Path, opt: &Opt) -> anyhow::Result<()> {
     let (return_buf, receive_buf) = channel::<Vec<u8>>();
 
     let f = fs::File::open(file_path)?;
-    let mmap = unsafe { memmap::MmapOptions::new().map(&f)? };
+    let mmap = unsafe { memmap2::MmapOptions::new().map(&f)? };
     let zipreader = Cursor::new(&mmap);
     let mut archive = zip::ZipArchive::new(zipreader)?;
 
