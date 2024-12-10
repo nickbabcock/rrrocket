@@ -1,3 +1,7 @@
+# v0.9.14 - December 10th, 2024
+
+- Support for v2.46 replays (this may not be complete, so additional bug reports are welcome).
+
 # v0.9.13 - October 25th, 2024
 
 - Preliminary v2.45 support for struct header properties and empty strings
