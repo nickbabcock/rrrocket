@@ -6,8 +6,8 @@ use rayon::iter::ParallelBridge;
 use rayon::prelude::*;
 use serde::Serialize;
 use std::fs::{self, OpenOptions};
-use std::io::{self, BufWriter};
-use std::io::{prelude::*, Cursor};
+use std::io::prelude::*;
+use std::io::{self, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, sync_channel};
 use std::thread;
@@ -255,8 +255,7 @@ fn zip(file_path: &Path, opt: &Opt) -> anyhow::Result<()> {
     let (return_buf, receive_buf) = channel::<Vec<u8>>();
 
     let f = fs::File::open(file_path)?;
-    let mmap = unsafe { memmap2::MmapOptions::new().map(&f)? };
-    let zipreader = Cursor::new(&mmap);
+    let zipreader = BufReader::new(f);
     let mut archive = zip::ZipArchive::new(zipreader)?;
 
     thread::scope(|scope| {
