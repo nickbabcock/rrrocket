@@ -1,3 +1,9 @@
+# v0.9.15 - December 13th, 2024
+
+- Improved support for Freeplay replays
+- Fix double jump decoded as dodge
+- Improved replay zip performance and reduced perceived memory usage
+
 # v0.9.14 - December 10th, 2024
 
 - Support for v2.46 replays (this may not be complete, so additional bug reports are welcome).
