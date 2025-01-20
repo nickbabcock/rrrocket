@@ -1,3 +1,7 @@
+# v0.10.1 - January 20th, 2025
+
+- Improve split shot support
+
 # v0.10.0 - January 17th, 2025
 
 Some minor breaking changes in JSON output
