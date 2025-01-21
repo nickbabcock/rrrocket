@@ -4,10 +4,11 @@ use clap::Parser;
 use glob::glob;
 use rayon::iter::ParallelBridge;
 use rayon::prelude::*;
+use rc_zip_sync::ReadZip;
 use serde::Serialize;
 use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
-use std::io::{self, BufReader, BufWriter};
+use std::io::{self, BufWriter};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, sync_channel};
 use std::thread;
@@ -255,36 +256,28 @@ fn zip(file_path: &Path, opt: &Opt) -> anyhow::Result<()> {
     let (return_buf, receive_buf) = channel::<Vec<u8>>();
 
     let f = fs::File::open(file_path)?;
-    let zipreader = BufReader::new(f);
-    let mut archive = zip::ZipArchive::new(zipreader)?;
+    let reader = f.read_zip()?;
 
     thread::scope(|scope| {
         scope.spawn(move || {
-            for i in 0..archive.len() {
-                let zipfile = archive
-                    .by_index(i)
-                    .with_context(|| format!("unable to retrieve zip index: {}", i));
+            for entry in reader.entries() {
+                if !matches!(entry.kind(), rc_zip_sync::rc_zip::parse::EntryKind::File) {
+                    continue;
+                }
 
-                let mut zipfile = match zipfile {
-                    Ok(zipfile) if zipfile.is_file() => zipfile,
-                    Ok(_) => continue,
-                    Err(e) => {
-                        if tx.send(Err(e)).is_err() {
-                            return;
-                        }
-                        continue;
-                    }
+                let Some(name) = entry.sanitized_name().map(String::from) else {
+                    continue;
                 };
 
-                let name = String::from(zipfile.name());
                 let mut buf = if let Ok(mut existing_buf) = receive_buf.try_recv() {
-                    existing_buf.resize(zipfile.size() as usize, 0);
+                    existing_buf.resize(entry.uncompressed_size as usize, 0);
                     existing_buf
                 } else {
-                    vec![0u8; zipfile.size() as usize]
+                    vec![0u8; entry.uncompressed_size as usize]
                 };
 
-                let result = zipfile
+                let result = entry
+                    .reader()
                     .read_exact(&mut buf)
                     .with_context(|| format!("unable to inflate: {}", name))
                     .map(|_| (name, buf));
