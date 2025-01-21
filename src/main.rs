@@ -7,7 +7,7 @@ use rayon::prelude::*;
 use serde::Serialize;
 use std::fs::{self, OpenOptions};
 use std::io::prelude::*;
-use std::io::{self, BufReader, BufWriter};
+use std::io::{self, BufWriter};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, sync_channel};
 use std::thread;
@@ -259,55 +259,101 @@ fn zip(file_path: &Path, opt: &Opt) -> anyhow::Result<()> {
     let (tx, rx) = sync_channel(parallelism - 1);
     let (return_buf, receive_buf) = channel::<Vec<u8>>();
 
+    let mut buffer = vec![0u8; rawzip::RECOMMENDED_BUFFER_SIZE];
     let f = fs::File::open(file_path)?;
-    let zipreader = BufReader::new(f);
-    let mut archive = zip::ZipArchive::new(zipreader)?;
+    let archive = rawzip::ZipArchive::from_file(f, &mut buffer)?;
+
+    let entries_len = archive.entries_hint().min(1_000_000);
+    let mut entries = archive.entries(&mut buffer);
+
+    // All the names of files concatenated together. Whereas a `Vec<String>`
+    // would incur at least one allocation per element, we are able to amortize
+    // the cost of storing names.
+    let mut names = String::with_capacity(entries_len as usize * 52);
+    let mut pos = Vec::with_capacity(entries_len as usize);
+
+    while let Some(entry) = entries.next_entry()? {
+        if entry.is_dir() {
+            continue;
+        }
+
+        let name = entry.file_safe_path()?;
+        names.push_str(&name);
+        let name_index = (names.len() - name.len())..names.len();
+        pos.push((name_index, entry.wayfinder()));
+    }
 
     thread::scope(|scope| {
+        let archive = &archive;
+        let names = &names;
         scope.spawn(move || {
-            for i in 0..archive.len() {
-                let zipfile = archive
-                    .by_index(i)
-                    .with_context(|| format!("unable to retrieve zip index: {}", i));
-
-                let mut zipfile = match zipfile {
-                    Ok(zipfile) if zipfile.is_file() => zipfile,
-                    Ok(_) => continue,
+            for (name_index, wayfinder) in pos {
+                let entry = match archive.get_entry(wayfinder) {
+                    Ok(entry) => entry,
                     Err(e) => {
-                        if tx.send(Err(e)).is_err() {
+                        if tx.send(Err(e).context("zip entry failed")).is_err() {
                             return;
                         }
                         continue;
                     }
                 };
 
-                let name = String::from(zipfile.name());
+                let name = &names[name_index];
+                let max_size = wayfinder
+                    .compressed_size_hint()
+                    .max(wayfinder.uncompressed_size_hint());
+                if max_size > 20 * 1000 * 1000 {
+                    let err = anyhow::anyhow!("{}: too large", name);
+                    if tx.send(Err(err)).is_err() {
+                        return;
+                    }
+                    continue;
+                }
+
                 let mut buf = if let Ok(mut existing_buf) = receive_buf.try_recv() {
-                    existing_buf.resize(zipfile.size() as usize, 0);
+                    existing_buf.resize(wayfinder.compressed_size_hint() as usize, 0);
                     existing_buf
                 } else {
-                    vec![0u8; zipfile.size() as usize]
+                    vec![0u8; wayfinder.compressed_size_hint() as usize]
                 };
 
-                let result = zipfile
+                let mut reader = entry.reader();
+                let read_result = reader
                     .read_exact(&mut buf)
-                    .with_context(|| format!("unable to inflate: {}", name))
-                    .map(|_| (name, buf));
+                    .with_context(|| format!("{}: read failed", name))
+                    .and_then(|_| reader.claim_verifier().context("verifier failed"))
+                    .map(|verifier| (name, buf, verifier));
 
                 // If the other end hung up stop processing.
-                if tx.send(result).is_err() {
+                if tx.send(read_result).is_err() {
                     return;
                 }
             }
         });
 
-        let data = rx.into_iter().par_bridge().map(|args| {
-            let (name, data) = args?;
-            let result = parse_replay(opt, &data).with_context(|| format!("{}: FAILED", name));
-            let _ = return_buf.send(data);
+        let data = rx.into_iter().par_bridge().map_init(
+            || {
+                // Each worker gets its own inflation buffer and decompressor
+                (Vec::<u8>::new(), libdeflater::Decompressor::new())
+            },
+            |(inflated, decompressor), args| {
+                let (name, raw, verification) = args?;
+                inflated.resize(verification.size() as usize, 0);
+                let inflation = decompressor.deflate_decompress(&raw, inflated)?;
+                let _ = return_buf.send(raw);
 
-            Ok((name, result?))
-        });
+                let crc = rawzip::crc32(&inflated[..inflation]);
+                verification.valid(rawzip::ZipVerification {
+                    crc,
+                    uncompressed_size: inflation as u64,
+                })?;
+
+                let result =
+                    parse_replay(opt, inflated).with_context(|| format!("{name}: FAILED"))?;
+
+                Ok((name, result))
+            },
+        );
 
         if opt.dry_run {
             data.for_each(|result: anyhow::Result<_>| match result {
