@@ -12,6 +12,11 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, sync_channel};
 use std::thread;
 
+// Avoid musl's default allocator due to terrible performance
+#[cfg(target_env = "musl")]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 /// Parses Rocket League replay files and outputs JSON with decoded information
 #[derive(Parser, Debug, Clone, PartialEq)]
 struct Opt {
