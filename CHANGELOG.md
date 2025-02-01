@@ -1,3 +1,8 @@
+# v0.10.2 - February 1st, 2025
+
+- Huge performance win for musl builds when processing files in parallel
+- Performance win with a lighterweight zip file implementation 
+
 # v0.10.1 - January 20th, 2025
 
 - Improve split shot support
