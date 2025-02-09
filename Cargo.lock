@@ -490,9 +490,9 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "rawzip"
-version = "0.0.2"
+version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef8e2a4fc6a5b38c2cb2059784ab64829ae1cc4c718568556ab7d9e59153fb80"
+checksum = "f2dd26122486869128b61553fc83abd3408aca5d31b637bceb34cb6f5b1b1149"
 
 [[package]]
 name = "rayon"
