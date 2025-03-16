@@ -1,3 +1,7 @@
+# v0.10.3 - March 16th, 2025
+
+- Initial support for v2.49 replays
+
 # v0.10.2 - February 1st, 2025
 
 - Huge performance win for musl builds when processing files in parallel
