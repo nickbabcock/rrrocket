@@ -277,8 +277,8 @@ fn zip(file_path: &Path, opt: &Opt) -> anyhow::Result<()> {
             continue;
         }
 
-        let name = entry.file_safe_path()?;
-        names.push_str(&name);
+        let name = entry.file_path().try_normalize()?;
+        names.push_str(name.as_ref());
         let name_index = (names.len() - name.len())..names.len();
         pos.push((name_index, entry.wayfinder()));
     }
