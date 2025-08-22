@@ -1,3 +1,7 @@
+# v0.10.7 - August 22nd, 2025
+
+- Support for v2.55 replays
+
 # v0.10.6 - July 30th, 2025
 
 - Support for v2.54 replays
