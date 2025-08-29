@@ -129,6 +129,4 @@ find . -type f -iname "*.replay" | xargs ~/rrrocket -m
 To have your graphs saved into your directory follow the below instructions:
 
 - Since the graphs are in the style of XKCD, one has to install the Humor Sans font before continuing (eg. `apt install fonts-humor-sans`)
-- Install [pipenv](https://pipenv.pypa.io/en/latest/#install-pipenv-today)
-- Install dependencies `pipenv && pipenv install`
-- Run on generated JSON files: `pipenv run boxcapy/rocket-plot.py *.json --headless`
+- Run on generated JSON files: `./boxcapy/rocket-plot.py *.json --headless`

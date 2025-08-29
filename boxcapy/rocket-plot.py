@@ -1,4 +1,12 @@
-#!/usr/bin/env python
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#   "matplotlib",
+#   "numpy",
+#   "click",
+# ]
+# ///
 
 import json
 import matplotlib
@@ -43,6 +51,7 @@ def run_analysis(headless, files):
     win_score = []
     goal_diff = []
     time_diff = np.array([])
+    name = "Player"
 
     for game in data:
         props = game["properties"]
@@ -182,7 +191,9 @@ def graph(headless, calc):
         bplot["boxes"][0].set_facecolor("#7B9F35")
         bplot["boxes"][1].set_facecolor("#AA3939")
         plt.ylabel("Score", fontdict={"fontsize": "xx-large"})
-        ax.set_ylim([0, max(max(*calc.win_score), max(*calc.lose_score)) * 1.2])
+        max_win = max(calc.win_score) if calc.win_score else 0
+        max_lose = max(calc.lose_score) if calc.lose_score else 0
+        ax.set_ylim([0, max(max_win, max_lose) * 1.2])
         ax.set_xticklabels(("Wins", "Losses"), fontdict={"fontsize": "xx-large"})
         fig.subplots_adjust(top=0.8)
         if headless:
