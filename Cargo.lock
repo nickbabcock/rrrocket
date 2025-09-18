@@ -103,9 +103,9 @@ checksum = "b66902ef37c92662310c6a02df613caf898133c12b7d121ef3c2f1d19eebabb5"
 
 [[package]]
 name = "boxcars"
-version = "0.10.6"
+version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d13cb11228f595d48ffc3d9e4961b41b9989920bdf80612f12ab33dc3d05d441"
+checksum = "f012e7707d6037148b9d109b8d967b10fe823aa60beecd1b36b78be735c45b31"
 dependencies = [
  "bitter",
  "encoding_rs",
