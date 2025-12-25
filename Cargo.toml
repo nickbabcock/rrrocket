@@ -12,17 +12,16 @@ edition = "2018"
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-clap = { version = "4", features = ["derive"] }
-rayon = "1"
+clap = { version = "4.5.53", features = ["derive"] }
+rayon = "1.11.0"
 boxcars = "0.10.9"
-glob = "0.3"
-either = "1"
-memmap2 = "0.9.5"
-rawzip = "0.4.2"
-libdeflater = "1.23.0"
+glob = "0.3.3"
+memmap2 = "0.9.9"
+rawzip = "0.4.3"
+libdeflater = "1.25.0"
 
 [target.'cfg(target_env = "musl")'.dependencies]
-mimalloc = "0.1.43"
+mimalloc = "0.1.48"
 
 [dev-dependencies]
 assert_cmd = "2"

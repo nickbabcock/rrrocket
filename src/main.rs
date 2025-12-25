@@ -102,33 +102,32 @@ fn parse_replay(opt: &Opt, data: &[u8]) -> Result<Replay, ParseError> {
         .parse()
 }
 
-fn expand_directory(dir: &Path) -> impl Iterator<Item = anyhow::Result<PathBuf>> {
+fn expand_directory(dir: &Path) -> std::vec::IntoIter<anyhow::Result<PathBuf>> {
     let dir_glob_fmt = format!("{}/**/*.replay", dir.display());
     let replays =
         glob(&dir_glob_fmt).with_context(|| format!("unable to form glob in {}", dir.display()));
 
     match replays {
-        Err(e) => either::Either::Left(std::iter::once(Err(e))),
-        Ok(replays) => {
-            let res = replays
-                .inspect(|file| {
-                    if let Err(ref e) = file {
-                        eprintln!("Unable to inspect: {}", e)
-                    }
-                })
-                .filter_map(|x| {
-                    if let Ok(pth) = x {
-                        if pth.is_file() {
-                            Some(Ok(pth))
-                        } else {
-                            None
-                        }
+        Err(e) => vec![Err(e)].into_iter(),
+        Ok(replays) => replays
+            .inspect(|file| {
+                if let Err(ref e) = file {
+                    eprintln!("Unable to inspect: {}", e)
+                }
+            })
+            .filter_map(|x| {
+                if let Ok(pth) = x {
+                    if pth.is_file() {
+                        Some(Ok(pth))
                     } else {
-                        Some(x.context("glob error"))
+                        None
                     }
-                });
-            either::Either::Right(res)
-        }
+                } else {
+                    Some(x.context("glob error"))
+                }
+            })
+            .collect::<Vec<_>>()
+            .into_iter(),
     }
 }
 
@@ -138,9 +137,9 @@ fn expand_paths(files: &[PathBuf]) -> impl Iterator<Item = anyhow::Result<PathBu
     files.iter().flat_map(|arg_file| {
         let p = Path::new(arg_file);
         if p.is_file() {
-            either::Either::Left(std::iter::once(Ok(p.to_path_buf())))
+            vec![Ok(p.to_path_buf())].into_iter()
         } else {
-            either::Either::Right(expand_directory(p))
+            expand_directory(p)
         }
     })
 }
