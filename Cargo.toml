@@ -10,15 +10,15 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-clap = { version = "4.5.53", features = ["derive"] }
-rayon = "1.11.0"
 boxcars = "0.10.10"
+clap = { version = "4.5.53", features = ["derive"] }
 glob = "0.3.3"
+libdeflater = "1.25.0"
 memmap2 = "0.9.9"
 rawzip = "0.4.3"
-libdeflater = "1.25.0"
+rayon = "1.11.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [target.'cfg(target_env = "musl")'.dependencies]
 mimalloc = "0.1.48"

@@ -341,7 +341,7 @@ fn zip(file_path: &Path, opt: &Opt) -> anyhow::Result<()> {
                 let inflation = decompressor.deflate_decompress(&raw, inflated)?;
                 let _ = return_buf.send(raw);
 
-                let crc = rawzip::crc32(&inflated[..inflation]);
+                let crc = libdeflater::crc32(&inflated[..inflation]);
                 verification.valid(rawzip::ZipVerification {
                     crc,
                     uncompressed_size: inflation as u64,
