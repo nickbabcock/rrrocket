@@ -97,15 +97,15 @@ checksum = "34efbcccd345379ca2868b2b2c9d3782e9cc58ba87bc7d79d5b53d9c9ae6f25d"
 
 [[package]]
 name = "bitter"
-version = "0.8.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b901cc77d53ab0456afe5955ae6be367aaeb89b6ec2b6c174351eddd27e983c"
+checksum = "40ce3582fb888755eb1a77668e69f90c3b317fdcc85bbeacd0d9bdfa89427173"
 
 [[package]]
 name = "boxcars"
-version = "0.10.10"
+version = "0.10.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ae2de4be73b2de0ced50be60e1a46c99316aab7aafff3a7ba62f15a34f7a384"
+checksum = "83d1dfdbdbd7921631afcb379cca971f5a8597eb5e35ab6dcb59ed4d7d6d56b7"
 dependencies = [
  "bitter",
  "encoding_rs",
