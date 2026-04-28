@@ -1,3 +1,7 @@
+# v0.11.1 - April 28th, 2026
+
+- Support Easy Anti-Cheat replays
+
 # v0.11.0 - April 25th, 2026
 
 Breaking changes:
