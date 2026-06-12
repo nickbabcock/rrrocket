@@ -1,3 +1,7 @@
+# v0.11.3 - June 11th, 2026
+
+- Support for v2.70 additional attributes (PickupTimer_TA and PRI_TA anonymization)
+
 # v0.11.2 - June 11th, 2026
 
 - Support v2.70 replays with world cup and anonymized name attributes
