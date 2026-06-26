@@ -10,7 +10,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1"
-boxcars = "0.11.3"
+boxcars = "0.11.4"
 clap = { version = "4.5.53", features = ["derive"] }
 glob = "0.3.3"
 libdeflater = "1.25.0"
