@@ -1,3 +1,7 @@
+# v0.11.5 - July 8th, 2026
+
+- Support for DemoFXOverride attribute
+
 # v0.11.4 - June 25th, 2026
 
 - Support for v2.71 TAGame.GRI_TA:LanMatchGUID attribute
