@@ -320,8 +320,7 @@ fn zip(file_path: &Path, opt: &Opt) -> anyhow::Result<()> {
                 let read_result = reader
                     .read_exact(&mut buf)
                     .with_context(|| format!("{}: read failed", name))
-                    .and_then(|_| reader.claim_verifier().context("verifier failed"))
-                    .map(|verifier| (name, buf, verifier));
+                    .map(|_| (name, buf, reader.claim_verifier()));
 
                 // If the other end hung up stop processing.
                 if tx.send(read_result).is_err() {
@@ -337,7 +336,7 @@ fn zip(file_path: &Path, opt: &Opt) -> anyhow::Result<()> {
             },
             |(inflated, decompressor), args| {
                 let (name, raw, verification) = args?;
-                inflated.resize(verification.size() as usize, 0);
+                inflated.resize(verification.uncompressed_size as usize, 0);
                 let inflation = decompressor.deflate_decompress(&raw, inflated)?;
                 let _ = return_buf.send(raw);
 
