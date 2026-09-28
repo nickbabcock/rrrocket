@@ -1,3 +1,7 @@
+# v0.11.6 - September 28th, 2026
+
+- Support for Season 24 replays
+
 # v0.11.5 - July 8th, 2026
 
 - Support for DemoFXOverride attribute
