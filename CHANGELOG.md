@@ -1,3 +1,7 @@
+# v0.11.7 - October 12th, 2026
+
+- Support for the `TAGame.Car_TA:MaxNumJumps` replay attribute
+
 # v0.11.6 - September 28th, 2026
 
 - Support for Season 24 replays
