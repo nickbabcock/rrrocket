@@ -1,3 +1,7 @@
+# v0.11.8 - October 18th, 2026
+
+- Support for replays with certified items (`TAGame.ProductAttribute_Certified_TA`)
+
 # v0.11.7 - October 12th, 2026
 
 - Support for the `TAGame.Car_TA:MaxNumJumps` replay attribute
