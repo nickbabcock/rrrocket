@@ -1,3 +1,7 @@
+# v0.11.9 - November 15th, 2026
+
+- Support for replays where an accepted honor duel is cleared (e.g. a player leaves the match)
+
 # v0.11.8 - October 18th, 2026
 
 - Support for replays with certified items (`TAGame.ProductAttribute_Certified_TA`)
